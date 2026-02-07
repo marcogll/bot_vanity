@@ -20,6 +20,9 @@ RUN npm ci --only=production && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/vanity_data ./vanity_data
+COPY --from=builder /app/system_prompt.md ./
+COPY --from=builder /app/conversation_guides ./conversation_guides
+COPY --from=builder /app/personality_rules ./personality_rules
 
 USER node
 
