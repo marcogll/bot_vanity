@@ -23,10 +23,12 @@ app.use(cors());
 app.use(express.json());
 
 app.get('/', (req: Request, res: Response) => {
+  const baseUrl = process.env.COOLIFY_FQDN || process.env.COOLIFY_URL || `http://localhost:${PORT}`;
   res.json({
     name: 'Vanessa Bot API',
     version: '1.0.0',
     status: 'running',
+    baseUrl,
     features: {
       conversationMemory: true,
       sentimentAnalysis: true,
@@ -34,10 +36,10 @@ app.get('/', (req: Request, res: Response) => {
       personalityGuides: true
     },
     endpoints: {
-      webhook: '/webhook',
-      health: '/health',
-      stats: '/stats',
-      test: '/test (POST) - Test the bot without Evolution API'
+      webhook: `${baseUrl}/webhook`,
+      health: `${baseUrl}/health`,
+      stats: `${baseUrl}/stats`,
+      test: `${baseUrl}/test (POST) - Test the bot without Evolution API`
     }
   });
 });
@@ -133,10 +135,12 @@ app.use((req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   const memoryStats = conversationMemory.getStats();
+  const baseUrl = process.env.COOLIFY_FQDN || process.env.COOLIFY_URL || `http://localhost:${PORT}`;
   console.log(`\n✨ Vanessa Bot Server running on port ${PORT}`);
-  console.log(`📡 Webhook endpoint: http://localhost:${PORT}/webhook`);
-  console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-  console.log(`📊 Stats endpoint: http://localhost:${PORT}/stats`);
+  console.log(`🌐 Base URL: ${baseUrl}`);
+  console.log(`📡 Webhook endpoint: ${baseUrl}/webhook`);
+  console.log(`🏥 Health check: ${baseUrl}/health`);
+  console.log(`📊 Stats endpoint: ${baseUrl}/stats`);
   console.log(`\n📊 Memory Stats:`);
   console.log(`   - Total users: ${memoryStats.totalUsers}`);
   console.log(`   - Active conversations: ${memoryStats.activeConversations}`);

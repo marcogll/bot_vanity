@@ -61,6 +61,16 @@ FORMBRICKS_URL=https://your-formbricks-instance.com/form/quejas
 
 **Note on NODE_ENV:** If Coolify warns about NODE_ENV being set to "development" at build time, this is expected and OK. The Dockerfile uses a multi-stage build that installs all dependencies during the build stage (including TypeScript), and only production dependencies at runtime.
 
+**Coolify Auto-Injected Environment Variables:**
+
+Coolify automatically injects these variables at runtime:
+- `COOLIFY_URL` - Base URL of your Coolify instance
+- `COOLIFY_FQDN` - Fully qualified domain name of your application
+- `COOLIFY_BRANCH` - Current git branch
+- `COOLIFY_RESOURCE_UUID` - Unique ID for your service
+
+The application automatically uses these variables to display correct URLs in logs and API responses instead of `localhost`.
+
 #### 5. Configure Port
 
 In the "Network" section:
