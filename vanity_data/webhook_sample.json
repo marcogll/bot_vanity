@@ -1,0 +1,16 @@
+{
+  "event": "messages.upsert",
+  "instance": "VanityBot",
+  "data": {
+    "key": {
+      "remoteJid": "5218441234567@s.whatsapp.net",
+      "fromMe": false,
+      "id": "3EB0X123456789"
+    },
+    "pushName": "Maria Cliente",
+    "message": {
+      "conversation": "Hola, ¿cuánto cuesta el diseño de cejas?"
+    },
+    "messageType": "conversation"
+  }
+}
