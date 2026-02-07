@@ -44,8 +44,10 @@ Start Command: npm start
 
 In the "Environment" section, add these variables:
 
+**Important:** Set `NODE_ENV` as "Runtime only" (NOT available at build time). This allows the build stage to install devDependencies (like TypeScript) needed for compilation.
+
 ```env
-NODE_ENV=production
+NODE_ENV=production  (Runtime only, NOT available at build time)
 PORT=3000
 EVOLUTION_API_URL=https://evolution.soul23.cloud/manager/
 EVOLUTION_API_KEY=your_actual_evolution_api_key
@@ -56,6 +58,8 @@ FORMBRICKS_URL=https://your-formbricks-instance.com/form/quejas
 ```
 
 **Important:** Replace `your_actual_evolution_api_key` and `your_actual_openai_api_key` with your real keys.
+
+**Note on NODE_ENV:** If Coolify warns about NODE_ENV being set to "development" at build time, this is expected and OK. The Dockerfile uses a multi-stage build that installs all dependencies during the build stage (including TypeScript), and only production dependencies at runtime.
 
 #### 5. Configure Port
 
