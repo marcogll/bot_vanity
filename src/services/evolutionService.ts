@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { EvolutionSendMessage } from '../types';
 
-const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'https://api.evolution-api.com';
+const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || 'https://api.evolution-api.com').replace(/\/$/, '');
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'VanityBot';
 
