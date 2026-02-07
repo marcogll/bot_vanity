@@ -30,7 +30,11 @@ bot_vanity/
 │   ├── services.jsonl                   # Catálogo de servicios
 │   └── locations.jsonl                  # Ubicaciones y políticas
 ├── system_prompt.md                      # Prompt del sistema (250 líneas)
+├── Dockerfile                            # Configuración de Docker
+├── docker-compose.yml                    # Compose para despliegue local
+├── .dockerignore                         # Archivos a ignorar en Docker
 ├── .env                                # Variables de entorno
+├── .env.example                        # Ejemplo de variables de entorno
 ├── package.json
 └── tsconfig.json
 ```
@@ -72,6 +76,85 @@ npm run dev
 ```bash
 npm run build
 npm start
+```
+
+---
+
+## 🐳 Docker & Coolify Deployment
+
+### Usar Docker Compose
+
+1. **Construir y levantar el contenedor:**
+```bash
+docker-compose up -d
+```
+
+2. **Ver logs:**
+```bash
+docker-compose logs -f vanessa-bot
+```
+
+3. **Detener el contenedor:**
+```bash
+docker-compose down
+```
+
+### Desplegar en Coolify
+
+Coolify soporta dos métodos de despliegue:
+
+#### Método 1: Git Repository (Recomendado)
+
+1. **Asegúrate de tener un `.env` configurado** (usa `.env.example` como referencia)
+2. **Crea un nuevo proyecto en Coolify**
+3. **Selecciona "Git Repository" como fuente**
+4. **Ingresa tu repo:** `git@github.com:marcogll/bot_vanity.git`
+5. **Configura el proyecto:**
+   - **Buildpack:** Node.js
+   - **Build Command:** `npm run build`
+   - **Start Command:** `npm start`
+   - **Port:** 3000
+6. **Configura las variables de entorno en Coolify:**
+   ```env
+   NODE_ENV=production
+   PORT=3000
+   EVOLUTION_API_URL=https://evolution.soul23.cloud/manager/
+   EVOLUTION_API_KEY=tu_api_key_aqui
+   EVOLUTION_INSTANCE=noire
+   OPENAI_API_KEY=tu_openai_key_aqui
+   OPENAI_MODEL=gpt-4o-mini
+   FORMBRICKS_URL=https://your-formbricks-instance.com/form/quejas
+   ```
+7. **Haz deploy**
+
+#### Método 2: Docker Compose
+
+1. **Crea un nuevo proyecto en Coolify**
+2. **Selecciona "Docker Compose" como fuente**
+3. **Pega el contenido de `docker-compose.yml`**
+4. **Configura las variables de entorno en Coolify** (ver arriba)
+5. **Haz deploy**
+
+### Configuración del Webhook de Evolution API
+
+Una vez desplegado en Coolify:
+
+1. **Copia la URL de tu aplicación** (ej: `https://tu-app.coolify.io`)
+2. **Configura el webhook en Evolution API:**
+   - **URL:** `https://tu-app.coolify.io/webhook`
+   - **Método:** POST
+   - **Content-Type:** `application/json`
+
+### Health Check
+
+El contenedor incluye un health check automático:
+```bash
+curl https://tu-app.coolify.io/health
+```
+
+Respuesta esperada:
+```json
+{"status":"healthy","timestamp":"2026-02-07T21:00:00.000Z"}
 ```
 
 ---

@@ -1,0 +1,35 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Environment
+.env
+
+# Git
+.git
+.gitignore
+
+# Documentation (opcional, pero puede reducir el tamaño de la imagen)
+*.md
+!README.md
+
+# Test files
+*.test.ts
+*.spec.ts
+coverage/
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+Thumbs.db
+server.log
