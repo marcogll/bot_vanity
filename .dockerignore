@@ -10,9 +10,14 @@ yarn-error.log
 .git
 .gitignore
 
-# Documentation (opcional, pero puede reducir el tamaño de la imagen)
+# Documentation (keep system_prompt.md and README.md)
 *.md
 !README.md
+!system_prompt.md
+
+# Documentation folders
+conversation_guides/
+personality_rules/
 
 # Test files
 *.test.ts
