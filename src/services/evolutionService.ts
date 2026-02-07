@@ -25,10 +25,22 @@ export async function sendMessage(
       delay: delay
     };
 
-    await api.post('', payload);
+    console.log(`📤 Sending message to Evolution API:`);
+    console.log(`   URL: ${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`);
+    console.log(`   Phone: ${phoneNumber}`);
+    console.log(`   Text: ${text}`);
+    console.log(`   Delay: ${delay}ms`);
+
+    const response = await api.post('', payload);
+
+    console.log(`✅ Evolution API response:`, response.data);
     console.log(`✅ Message sent to ${phoneNumber}`);
-  } catch (error) {
-    console.error('❌ Error sending message:', error);
+  } catch (error: any) {
+    console.error('❌ Error sending message to Evolution API:');
+    console.error('   Status:', error.response?.status);
+    console.error('   StatusText:', error.response?.statusText);
+    console.error('   Data:', error.response?.data);
+    console.error('   Full error:', error.message);
     throw new Error('Failed to send message');
   }
 }

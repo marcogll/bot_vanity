@@ -85,7 +85,9 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     );
 
     // 7. Enviar respuesta
-    await sendMessage(extractPhoneNumber(remoteJid), aiResponse);
+    const phoneNumber = extractPhoneNumber(remoteJid);
+    console.log(`📱 Sending response to phone number: ${phoneNumber} (from JID: ${remoteJid})`);
+    await sendMessage(phoneNumber, aiResponse);
 
     // 8. Guardar en memoria
     conversationMemory.addMessage(remoteJid, userMessage, 'user', sentimentAnalysis.sentiment);
