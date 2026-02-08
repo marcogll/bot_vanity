@@ -4,9 +4,10 @@ import { EvolutionSendMessage } from '../types';
 const EVOLUTION_API_URL = (process.env.EVOLUTION_API_URL || 'https://api.evolution-api.com').replace(/\/$/, '');
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
 const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE || 'VanityBot';
+const EVOLUTION_API_ENDPOINT = process.env.EVOLUTION_API_ENDPOINT || '/message/sendText';
 
 const api = axios.create({
-  baseURL: `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`,
+  baseURL: `${EVOLUTION_API_URL}${EVOLUTION_API_ENDPOINT}/${EVOLUTION_INSTANCE}`,
   headers: {
     'Content-Type': 'application/json',
     'apikey': EVOLUTION_API_KEY
