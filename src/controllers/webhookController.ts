@@ -45,8 +45,8 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
         caption: message.imageMessage?.caption
       };
 
-      conversationMemory.addMessage(remoteJid, '[IMAGEN GUARDADA]', 'user', sentimentAnalysis.sentiment);
-      conversationMemory.addMessage(remoteJid, JSON.stringify(imageData), 'system', sentimentAnalysis.sentiment);
+      conversationMemory.addMessage(remoteJid, '[IMAGEN GUARDADA]', 'user');
+      conversationMemory.addMessage(remoteJid, JSON.stringify(imageData), 'assistant');
 
       // Respuesta temporal (se mejorará cuando el usuario siga en la conversación)
       const tempResponse = '¡Hola! 🤍 Recibí tu foto. La voy a revisar para poder darte información precisa. En unos minutos te contacto con los detalles del servicio que te interesa. ✨';
@@ -65,6 +65,41 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     console.log(`📨 Message from ${pushName} (${remoteJid}): ${userMessage}`);
     if (remoteJidAlt) {
       console.log(`📱 Alternative JID found: ${remoteJidAlt}`);
+    }
+
+    // MANEJO DEL COMANDO DIPIRIDÚ (para testing)
+    const lowerMessage = userMessage.toLowerCase().trim();
+    if (lowerMessage === 'dipiridú' || lowerMessage === 'dipiridu') {
+      console.log('🧹 Dipiridú command detected');
+      const phoneNumber = extractPhoneNumber(remoteJid, remoteJidAlt);
+      await sendMessage(phoneNumber, '⚠️ ¿Estás seguro de que quieres borrar TODA la base de datos de memoria? Esto eliminará todas las conversaciones guardadas. Responde "sí" para confirmar o "no" para cancelar.');
+      conversationMemory.setConfirmationPending(remoteJid);
+      res.status(200).json({ message: 'Dipiridú confirmation requested' });
+      return;
+    }
+
+    if (conversationMemory.isConfirmationPending(remoteJid)) {
+      if (lowerMessage === 'sí' || lowerMessage === 'si' || lowerMessage === 'yes' || lowerMessage === 'y') {
+        console.log('✅ Memory clear confirmed');
+        const result = conversationMemory.clearAll();
+        const phoneNumber = extractPhoneNumber(remoteJid, remoteJidAlt);
+        await sendMessage(phoneNumber, `🧹 ¡Hecho! He borrado ${result.cleared} conversaciones de la base de datos de memoria.`);
+        conversationMemory.clearConfirmationPending(remoteJid);
+        res.status(200).json({ message: 'Memory cleared', cleared: result.cleared });
+        return;
+      } else if (lowerMessage === 'no' || lowerMessage === 'cancelar' || lowerMessage === 'cancel') {
+        console.log('❌ Memory clear cancelled');
+        const phoneNumber = extractPhoneNumber(remoteJid, remoteJidAlt);
+        await sendMessage(phoneNumber, '✅ Operación cancelada. La base de datos de memoria se mantiene intacta.');
+        conversationMemory.clearConfirmationPending(remoteJid);
+        res.status(200).json({ message: 'Memory clear cancelled' });
+        return;
+      } else {
+        const phoneNumber = extractPhoneNumber(remoteJid, remoteJidAlt);
+        await sendMessage(phoneNumber, '❓ No entendí tu respuesta. Por favor responde "sí" para borrar la memoria o "no" para cancelar.');
+        res.status(200).json({ message: 'Waiting for confirmation' });
+        return;
+      }
     }
 
     // 1. Analizar sentimiento del mensaje

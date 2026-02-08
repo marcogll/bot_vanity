@@ -80,6 +80,7 @@ export interface UserContext {
   };
   result?: ConversationResult;
   sentimentHistory: ('positive' | 'neutral' | 'negative')[];
+  confirmationPending?: boolean;
 }
 
 // Sentiment Analysis Types

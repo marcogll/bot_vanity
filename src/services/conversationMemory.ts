@@ -261,6 +261,45 @@ export class ConversationMemory {
       lastServicesMentioned: context?.preferences?.mentionedServices || []
     };
   }
+
+  /**
+   * Borrar toda la base de datos en memoria
+   */
+  clearAll(): { cleared: number } {
+    const count = this.users.size;
+    this.users.clear();
+    console.log(`🧹 Memory cleared: ${count} conversations removed`);
+    return { cleared: count };
+  }
+
+  /**
+   * Marcar usuario esperando confirmación para borrar memoria
+   */
+  setConfirmationPending(remoteJid: string): void {
+    const context = this.getOrCreateContext(remoteJid);
+    context.confirmationPending = true;
+    this.users.set(remoteJid, context);
+    console.log(`⏳ Confirmation pending for ${remoteJid}`);
+  }
+
+  /**
+   * Verificar si usuario tiene confirmación pendiente
+   */
+  isConfirmationPending(remoteJid: string): boolean {
+    const context = this.users.get(remoteJid);
+    return context?.confirmationPending || false;
+  }
+
+  /**
+   * Limpiar estado de confirmación pendiente
+   */
+  clearConfirmationPending(remoteJid: string): void {
+    const context = this.users.get(remoteJid);
+    if (context) {
+      context.confirmationPending = false;
+      this.users.set(remoteJid, context);
+    }
+  }
 }
 
 // Singleton instance
