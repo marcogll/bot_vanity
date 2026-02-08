@@ -32,7 +32,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     const remoteJidAlt = key.remoteJidAlt;
 
     // Detectar si es mensaje de imagen
-    const isImageMessage = !!(message.conversation || message.extendedTextMessage?.text);
+    const isImageMessage = !!message.imageMessage;
 
     if (isImageMessage) {
       console.log('📸 Image message detected - saving for later processing');
@@ -142,7 +142,7 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
       history,
       upsellOpportunity,
       sentimentAnalysis.sentiment,
-      userInfo
+      { ...userInfo, isNewUser: history.length === 0 }
     );
 
     // 7. Enviar respuesta

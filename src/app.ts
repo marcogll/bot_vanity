@@ -94,7 +94,7 @@ app.post('/test', async (req: Request, res: Response) => {
       conversationHistory,
       upsellOpportunity,
       sentiment,
-      { pushName, isRecurring: conversationHistory.length > 0, preferredBranch: userPreferences?.preferredBranch }
+      { pushName, isRecurring: conversationHistory.length > 0, preferredBranch: userPreferences?.preferredBranch, isNewUser: conversationHistory.length === 0 }
     );
 
     conversationMemory.addMessage(phoneNumber, message, 'user', sentiment);

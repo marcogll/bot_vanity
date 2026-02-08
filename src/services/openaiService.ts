@@ -37,7 +37,7 @@ export async function generateResponse(
   conversationHistory: ConversationMessage[] = [],
   upsellOpportunity?: UpsellOpportunity,
   sentiment?: 'positive' | 'neutral' | 'negative',
-  userInfo?: { pushName?: string; isRecurring?: boolean; preferredBranch?: string }
+  userInfo?: { pushName?: string; isRecurring?: boolean; preferredBranch?: string; isNewUser?: boolean }
 ): Promise<string> {
   const systemPrompt = getSystemPrompt();
   
@@ -98,7 +98,7 @@ function buildFullPrompt(
   context: string,
   upsellOpportunity?: UpsellOpportunity,
   sentiment?: 'positive' | 'neutral' | 'negative',
-  userInfo?: { pushName?: string; isRecurring?: boolean; preferredBranch?: string }
+  userInfo?: { pushName?: string; isRecurring?: boolean; preferredBranch?: string; isNewUser?: boolean }
 ): string {
   let prompt = systemPrompt;
 
@@ -106,7 +106,15 @@ function buildFullPrompt(
   if (userInfo) {
     prompt += `\n\n# INFORMACIÓN DEL USUARIO`;
     if (userInfo.pushName) prompt += `\nNombre: ${userInfo.pushName}`;
-    if (userInfo.isRecurring) prompt += `\nTipo: Recurrente (ya ha interactuado antes)`;
+    if (userInfo.isNewUser) {
+      prompt += `\nTIPO: NUEVO USUARIO (PRIMER MENSAJE)`;
+      prompt += `\nINSTRUCCIÓN ESPECIAL: Preséntate y pregunta el nombre del usuario si aún no lo has recibido.`;
+    } else if (userInfo.isRecurring) {
+      prompt += `\nTIPO: Recurrente (ya ha interactuado antes)`;
+      prompt += `\nINSTRUCCIÓN: NO vuelvas a presentarte. Ya te conocen.`;
+    } else {
+      prompt += `\nTIPO: Usuario reciente`;
+    }
     if (userInfo.preferredBranch) prompt += `\nSucursal preferida: ${userInfo.preferredBranch}`;
   }
 
