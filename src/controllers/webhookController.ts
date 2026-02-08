@@ -31,16 +31,35 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     const remoteJid = key.remoteJid;
     const remoteJidAlt = key.remoteJidAlt;
 
-    if (!userMessage.trim()) {
-      console.log('📸 Non-text message received (likely media)');
-      const mediaResponse = '¡Hola! 🤍 Recibí tu foto. Para darte un precio exacto de un diseño personalizado, necesito que una compañera la revise. ¿Te gustaría que te contactemos para agendar una valoración?';
-      await sendMessage(extractPhoneNumber(remoteJid, remoteJidAlt), mediaResponse);
+    // Detectar si es mensaje de imagen
+    const isImageMessage = !!(message.conversation || message.extendedTextMessage?.text);
 
-      // Guardar en memoria
-      conversationMemory.addMessage(remoteJid, '[IMAGEN]', 'user', 'neutral');
+    if (isImageMessage) {
+      console.log('📸 Image message detected - saving for later processing');
 
-      res.status(200).json({ message: 'Media message handled' });
+      // Guardar imagen temporalmente en memoria
+      const imageData = {
+        type: 'image',
+        timestamp: new Date(),
+        url: message.imageMessage?.url,
+        caption: message.imageMessage?.caption
+      };
+
+      conversationMemory.addMessage(remoteJid, '[IMAGEN GUARDADA]', 'user', sentimentAnalysis.sentiment);
+      conversationMemory.addMessage(remoteJid, JSON.stringify(imageData), 'system', sentimentAnalysis.sentiment);
+
+      // Respuesta temporal (se mejorará cuando el usuario siga en la conversación)
+      const tempResponse = '¡Hola! 🤍 Recibí tu foto. La voy a revisar para poder darte información precisa. En unos minutos te contacto con los detalles del servicio que te interesa. ✨';
+
+      await sendMessage(extractPhoneNumber(remoteJid, remoteJidAlt), tempResponse);
+
+      res.status(200).json({ message: 'Image message handled - saved for processing' });
       return;
+    }
+
+    console.log(`📨 Message from ${pushName} (${remoteJid}): ${userMessage}`);
+    if (remoteJidAlt) {
+      console.log(`📱 Alternative JID found: ${remoteJidAlt}`);
     }
 
     console.log(`📨 Message from ${pushName} (${remoteJid}): ${userMessage}`);
