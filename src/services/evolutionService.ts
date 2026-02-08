@@ -46,6 +46,16 @@ export async function sendMessage(
   }
 }
 
-export function extractPhoneNumber(remoteJid: string): string {
+/**
+ * Extrae el número de teléfono del JID
+ * Si remoteJidAlt está disponible, lo usa ya que contiene el formato correcto
+ */
+export function extractPhoneNumber(remoteJid: string, remoteJidAlt?: string): string {
+  // Prioridad 1: remoteJidAlt si está disponible (ya tiene formato correcto)
+  if (remoteJidAlt && remoteJidAlt.includes('@s.whatsapp.net')) {
+    return remoteJidAlt.split('@')[0];
+  }
+  
+  // Prioridad 2: remoteJid normal
   return remoteJid.split('@')[0];
 }

@@ -29,20 +29,24 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
 
     const userMessage = message.conversation || message.extendedTextMessage?.text || '';
     const remoteJid = key.remoteJid;
+    const remoteJidAlt = key.remoteJidAlt;
 
     if (!userMessage.trim()) {
       console.log('📸 Non-text message received (likely media)');
       const mediaResponse = '¡Hola! 🤍 Recibí tu foto. Para darte un precio exacto de un diseño personalizado, necesito que una compañera la revise. ¿Te gustaría que te contactemos para agendar una valoración?';
-      await sendMessage(extractPhoneNumber(remoteJid), mediaResponse);
-      
+      await sendMessage(extractPhoneNumber(remoteJid, remoteJidAlt), mediaResponse);
+
       // Guardar en memoria
       conversationMemory.addMessage(remoteJid, '[IMAGEN]', 'user', 'neutral');
-      
+
       res.status(200).json({ message: 'Media message handled' });
       return;
     }
 
     console.log(`📨 Message from ${pushName} (${remoteJid}): ${userMessage}`);
+    if (remoteJidAlt) {
+      console.log(`📱 Alternative JID found: ${remoteJidAlt}`);
+    }
 
     // 1. Analizar sentimiento del mensaje
     const sentimentAnalysis = analyzeSentiment(userMessage);
@@ -88,8 +92,8 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
     );
 
     // 7. Enviar respuesta
-    const phoneNumber = extractPhoneNumber(remoteJid);
-    console.log(`📱 Sending response to phone number: ${phoneNumber} (from JID: ${remoteJid})`);
+    const phoneNumber = extractPhoneNumber(remoteJid, remoteJidAlt);
+    console.log(`📱 Sending response to phone number: ${phoneNumber} (from JID: ${remoteJid}, Alt JID: ${remoteJidAlt || 'N/A'})`);
     await sendMessage(phoneNumber, aiResponse);
 
     // 8. Guardar en memoria

@@ -24,6 +24,7 @@ export interface EvolutionWebhookData {
   data: {
     key: {
       remoteJid: string;
+      remoteJidAlt?: string;
       fromMe: boolean;
       id: string;
     };
