@@ -11,6 +11,9 @@ export async function handleWebhook(req: Request, res: Response): Promise<void> 
   try {
     const webhookData: EvolutionWebhookData = req.body;
 
+    // Log completo del payload del webhook para debugging
+    console.log('📨 FULL WEBHOOK PAYLOAD:', JSON.stringify(webhookData, null, 2));
+
     if (webhookData.event !== 'messages.upsert') {
       res.status(200).json({ message: 'Event ignored' });
       return;
