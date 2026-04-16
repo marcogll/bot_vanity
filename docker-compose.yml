@@ -1,0 +1,57 @@
+services:
+  vanessa-app:
+    build: .
+    container_name: vanessa-app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://vanity_user:vanity_password@vanessa-db:5432/vanity_db
+      PORT: 8000
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./docs:/app/docs:ro
+    depends_on:
+      vanessa-db:
+        condition: service_healthy
+    networks:
+      - vanity-net
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  vanessa-db:
+    image: postgres:15
+    container_name: vanity-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vanity_user
+      POSTGRES_PASSWORD: vanity_password
+      POSTGRES_DB: vanity_db
+    volumes:
+      - vanity_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    networks:
+      - vanity-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vanity_user -d vanity_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  vanity-net:
+    driver: bridge
+
+volumes:
+  vanity_postgres_data:
