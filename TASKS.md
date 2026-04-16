@@ -5,12 +5,13 @@ Configuración del entorno de ejecución en Omarchy.
 
 - [x] Dockerfile: Crear imagen basada en `python:3.11-slim` (optimizada para producción).
 - [x] Docker Compose: Configurar servicios `vanessa-app` y `vanessa-db` (PostgreSQL 15).
+- [x] Evolution Stack: Agregar `evolution-api`, PostgreSQL dedicado y Redis al mismo `docker-compose.yml` para despliegue en VPS.
 - [x] Network Isolation: Crear red interna `vanity-net` para que la DB no sea accesible desde el exterior.
 - [x] Volume Mapping: Configurar el montaje de la carpeta `./docs` como volumen de solo lectura para la app.
 - [x] Healthchecks: Configurar chequeos de salud para asegurar que la App reinicie si pierde conexión con la DB.
 
 **Notas Fase 1:**
-- `docker-compose.yml` expone `vanessa-app` en el host (`8001:8000`). PostgreSQL queda en `vanity-net` y solo publica `127.0.0.1:5432` para desarrollo local.
+- `docker-compose.yml` expone `vanessa-app` en el host (`8001:8000`) y Evolution en `8080:8080`. Las bases de datos y Redis quedan dentro de `vanity-net`, salvo `vanessa-db`, que publica `127.0.0.1:5432` para desarrollo local.
 - Para desarrollo local sin Docker de la app, se puede seguir usando `.venv` + `uvicorn --port 8001`.
 
 ## Fase 2: Backend y Core (FastAPI) 🐍

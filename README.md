@@ -56,14 +56,50 @@ curl http://127.0.0.1:8001/health
 
 ## Docker
 
-Para levantar aplicación y base de datos juntos:
+Para construir la imagen de Vanessa:
+
+```bash
+docker build -t marcogll/vanessa-bot-vanity:latest .
+```
+
+Para publicarla en Docker Hub:
+
+```bash
+docker push marcogll/vanessa-bot-vanity:latest
+```
+
+Para levantar el stack completo en el VPS:
 
 ```bash
 docker compose up -d --build
 ```
 
+El stack levanta:
+
+- `vanessa-app`: backend FastAPI.
+- `vanessa-db`: PostgreSQL de Vanessa.
+- `evolution-api`: instancia de Evolution API v2.
+- `evolution-db`: PostgreSQL de Evolution.
+- `evolution-redis`: cache de Evolution.
+
 La app queda publicada en:
 
 ```text
 http://127.0.0.1:8001
+```
+
+Evolution queda publicado en:
+
+```text
+http://127.0.0.1:8080
+```
+
+En producción configura `EVOLUTION_SERVER_URL` con el dominio público de Evolution,
+por ejemplo `https://evo.tu-dominio.com`, y usa el mismo `EVOLUTION_API_KEY` para
+autenticar llamadas desde Vanessa hacia Evolution.
+
+Para ver logs:
+
+```bash
+docker compose logs -f vanessa-app evolution-api
 ```
