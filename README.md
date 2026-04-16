@@ -59,13 +59,13 @@ curl http://127.0.0.1:8001/health
 Para construir la imagen de Vanessa:
 
 ```bash
-docker build -t marcogll/vanessa-bot-vanity:latest .
+docker build -t <docker-user>/vanessa-bot-vanity:latest .
 ```
 
 Para publicarla en Docker Hub:
 
 ```bash
-docker push marcogll/vanessa-bot-vanity:latest
+docker push <docker-user>/vanessa-bot-vanity:latest
 ```
 
 Para levantar el stack completo en el VPS:
