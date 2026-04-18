@@ -87,8 +87,8 @@ services:
       CACHE_REDIS_PREFIX_KEY: evolution
       CACHE_REDIS_SAVE_INSTANCES: "false"
       CACHE_LOCAL_ENABLED: "false"
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     volumes:
       - evolution_instances:/evolution/instances
     depends_on:

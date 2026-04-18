@@ -88,10 +88,10 @@ La app queda publicada en:
 http://127.0.0.1:8001
 ```
 
-Evolution queda publicado en:
+Evolution queda disponible dentro de la red Docker en:
 
 ```text
-http://127.0.0.1:8080
+http://evolution-api:8080
 ```
 
 En producción configura `EVOLUTION_SERVER_URL` con el dominio público de Evolution,
