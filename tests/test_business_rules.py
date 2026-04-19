@@ -1,5 +1,4 @@
 from app.business_rules import needs_human_handover
-from app.evolution import _jid_to_number
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     EvolutionWebhookPayload,
@@ -180,9 +179,20 @@ def test_reply_target_ignores_timestamps_for_lid_webhook() -> None:
     assert _reply_target(payload) == "249391621378064@lid"
 
 
-def test_lid_target_is_preserved_for_evolution_send_text() -> None:
-    assert _jid_to_number("249391621378064@lid") == "249391621378064@lid"
-    assert _jid_to_number("5218441026472@s.whatsapp.net") == "5218441026472"
+def test_lid_payload_keeps_diagnostics_for_logs() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "sender": "249391621378064@lid",
+                "message": {"conversation": "Hola"},
+            },
+        }
+    )
+
+    assert payload.reply_candidates == []
+    assert "data.sender=249391621378064@lid" in payload.reply_diagnostics
 
 
 def test_media_caption_payload_is_flattened() -> None:

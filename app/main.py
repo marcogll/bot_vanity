@@ -36,6 +36,7 @@ class EvolutionWebhookPayload(BaseModel):
     remote_jid: str = Field(default="", alias="remoteJid")
     sender: str | None = None
     reply_candidates: list[str] = Field(default_factory=list, alias="replyCandidates")
+    reply_diagnostics: list[str] = Field(default_factory=list, alias="replyDiagnostics")
     push_name: str | None = Field(default=None, alias="pushName")
     instance_name: str | None = Field(default=None, alias="instanceName")
     server_url: str | None = Field(default=None, alias="serverUrl")
@@ -71,6 +72,7 @@ class EvolutionWebhookPayload(BaseModel):
             "remoteJid": remote_jid,
             "sender": sender,
             "replyCandidates": _find_reply_identifiers(value, remote_jid),
+            "replyDiagnostics": _find_reply_identifier_diagnostics(value),
             "pushName": data.get("pushName") or value.get("pushName"),
             "instanceName": value.get("instance") or value.get("instanceName"),
             "serverUrl": value.get("server_url") or value.get("serverUrl"),
@@ -372,6 +374,15 @@ def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
     target = _reply_target(payload)
     logger.warning("Sending WhatsApp reply: remote_jid=%s target=%s", payload.remote_jid, target)
+    if "@lid" in target:
+        logger.error(
+            "No sendable WhatsApp target found for LID webhook: remote_jid=%s sender=%s candidates=%s diagnostics=%s",
+            payload.remote_jid,
+            payload.sender,
+            payload.reply_candidates,
+            payload.reply_diagnostics,
+        )
+        return
     try:
         await send_text_message(target, reply, instance_name=payload.instance_name)
     except Exception:
@@ -441,6 +452,36 @@ def _find_reply_identifiers(value: object, remote_jid: str) -> list[str]:
         if isinstance(current, list):
             stack.extend((item, f"{path}[]") for item in current)
     return candidates
+
+
+def _find_reply_identifier_diagnostics(value: object) -> list[str]:
+    diagnostics: list[str] = []
+    seen: set[str] = set()
+    stack: list[tuple[object, str]] = [(value, "")]
+    while stack:
+        current, path = stack.pop()
+        if isinstance(current, str):
+            candidate = _diagnostic_identifier_from_string(current, path)
+            if candidate and candidate not in seen:
+                seen.add(candidate)
+                diagnostics.append(f"{path or '<root>'}={candidate}")
+            continue
+        if isinstance(current, dict):
+            stack.extend((item, f"{path}.{key}" if path else str(key)) for key, item in current.items())
+            continue
+        if isinstance(current, list):
+            stack.extend((item, f"{path}[]") for item in current)
+    return diagnostics[:20]
+
+
+def _diagnostic_identifier_from_string(value: str, path: str = "") -> str | None:
+    if _is_rejected_reply_path(path):
+        return None
+    if value.endswith(("@s.whatsapp.net", "@lid")):
+        return value
+    if re.fullmatch(r"\+?\d{11,15}", value):
+        return value.removeprefix("+")
+    return None
 
 
 def _reply_identifier_from_string(value: str, path: str = "") -> str | None:
@@ -550,6 +591,7 @@ def _build_sender_debug_reply(payload: EvolutionWebhookPayload) -> str:
         f"remote_jid: {payload.remote_jid}\n"
         f"sender: {payload.sender or 'None'}\n"
         f"reply_candidates: {payload.reply_candidates or []}\n"
+        f"reply_diagnostics: {payload.reply_diagnostics or []}\n"
         f"target: {target}\n"
         f"instance: {payload.instance_name or 'None'}\n"
         f"message_type: {payload.message_type or 'None'}"
