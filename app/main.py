@@ -201,12 +201,17 @@ async def _ask_vanessa(
         }
     )
 
-    completion = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=messages,
-        temperature=0.4,
-        max_tokens=450,
-    )
+    try:
+        completion = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            temperature=0.4,
+            max_tokens=450,
+        )
+    except Exception:
+        logger.exception("OpenAI response generation failed")
+        return "Una especialista humana de Vanity tomará tu conversación en breve."
+
     content = completion.choices[0].message.content
     if not content:
         return "Una especialista humana de Vanity tomará tu conversación en breve."
@@ -250,7 +255,10 @@ def _extract_message_text(message: object) -> str:
 
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
-    await send_text_message(payload.remote_jid, reply, instance_name=payload.instance_name)
+    try:
+        await send_text_message(payload.remote_jid, reply, instance_name=payload.instance_name)
+    except Exception:
+        logger.exception("Failed to send WhatsApp reply to %s", payload.remote_jid)
 
 
 async def _get_or_create_memory(

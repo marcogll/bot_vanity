@@ -6,6 +6,7 @@ from app.main import (
     _is_confirmation,
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
+    _send_reply,
 )
 from app.pricing import estimate_from_message
 from app.security import looks_like_prompt_injection
@@ -67,3 +68,20 @@ def test_evolution_messages_upsert_payload_is_flattened() -> None:
     assert payload.instance_name == "sofia"
     assert payload.message == "Hola"
     assert not payload.from_me
+
+
+async def _failing_send_text_message(*args: object, **kwargs: object) -> None:
+    raise RuntimeError("send failed")
+
+
+def test_send_reply_swallows_evolution_errors(monkeypatch) -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        instanceName="sofia",
+        message="Hola",
+    )
+    monkeypatch.setattr("app.main.send_text_message", _failing_send_text_message)
+
+    import asyncio
+
+    asyncio.run(_send_reply(payload, "Hola"))
