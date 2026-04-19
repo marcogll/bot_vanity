@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_rules import human_handover_reply, needs_human_handover
@@ -23,6 +23,12 @@ from app.security import looks_like_prompt_injection, validate_webhook_api_key
 logger = logging.getLogger("vanessa")
 app = FastAPI(title="Vanessa Bot Vanity", version="0.1.0")
 rate_limiter: InMemoryRateLimiter | None = None
+MEMORY_DELETE_TRIGGER = "dipiridú"
+MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
+MEMORY_DELETE_CONFIRMATION_REPLY = (
+    "¿Confirmas que deseas borrar tu memoria de conversación con Vanessa? "
+    "Responde sí para borrarla o no para conservarla."
+)
 
 
 class EvolutionWebhookPayload(BaseModel):
@@ -85,6 +91,23 @@ async def webhook(
 
     logger.info("Message received from %s", payload.remote_jid)
 
+    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
+    pending_delete = _memory_delete_is_pending(memory)
+
+    if _is_memory_delete_trigger(payload.message):
+        reply = MEMORY_DELETE_CONFIRMATION_REPLY
+        memory.push_name = payload.push_name or memory.push_name
+        memory.resumen_perfil = _mark_memory_delete_pending(memory.resumen_perfil)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+        await db.commit()
+        logger.info("Memory delete confirmation requested by %s", payload.remote_jid)
+        return WebhookResponse(message=reply)
+
+    if pending_delete:
+        response_text = await _handle_memory_delete_confirmation(db, memory, payload)
+        logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
+        return WebhookResponse(message=response_text)
+
     if needs_human_handover(payload.message):
         reply = human_handover_reply()
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
@@ -99,7 +122,6 @@ async def webhook(
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
         return WebhookResponse(message=safe_reply)
 
-    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
     history = await _get_recent_history(db, payload.remote_jid)
 
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
@@ -200,6 +222,16 @@ async def _get_recent_history(db: AsyncSession, whatsapp_id: str, limit: int = 1
     return list(reversed(result.scalars().all()))
 
 
+async def _add_interaction_pair(
+    db: AsyncSession,
+    whatsapp_id: str,
+    user_message: str,
+    assistant_message: str,
+) -> None:
+    db.add(Interaccion(whatsapp_id, MessageRole.user, user_message))
+    db.add(Interaccion(whatsapp_id, MessageRole.assistant, assistant_message))
+
+
 async def _persist_interaction(
     db: AsyncSession,
     whatsapp_id: str,
@@ -208,9 +240,64 @@ async def _persist_interaction(
     assistant_message: str,
 ) -> None:
     await _get_or_create_memory(db, whatsapp_id, push_name)
-    db.add(Interaccion(whatsapp_id, MessageRole.user, user_message))
-    db.add(Interaccion(whatsapp_id, MessageRole.assistant, assistant_message))
+    await _add_interaction_pair(db, whatsapp_id, user_message, assistant_message)
     await db.commit()
+
+
+def _is_memory_delete_trigger(message: str) -> bool:
+    return message.strip().casefold() == MEMORY_DELETE_TRIGGER
+
+
+def _memory_delete_is_pending(memory: SesionMemoria) -> bool:
+    return (memory.resumen_perfil or "").startswith(MEMORY_DELETE_PENDING_MARKER)
+
+
+def _mark_memory_delete_pending(summary: str | None) -> str:
+    if summary and summary.startswith(MEMORY_DELETE_PENDING_MARKER):
+        return summary
+    return f"{MEMORY_DELETE_PENDING_MARKER}\n{summary or ''}"
+
+
+def _clear_memory_delete_pending(summary: str | None) -> str | None:
+    if not summary or not summary.startswith(MEMORY_DELETE_PENDING_MARKER):
+        return summary
+    restored = summary.removeprefix(MEMORY_DELETE_PENDING_MARKER).lstrip()
+    return restored or None
+
+
+def _is_confirmation(message: str) -> bool:
+    normalized = message.strip().casefold()
+    return normalized in {"si", "sí", "confirmo", "confirmar", "borrar", "eliminar"}
+
+
+def _is_cancellation(message: str) -> bool:
+    normalized = message.strip().casefold()
+    return normalized in {"no", "cancelar", "cancela", "conservar", "mantener"}
+
+
+async def _handle_memory_delete_confirmation(
+    db: AsyncSession,
+    memory: SesionMemoria,
+    payload: EvolutionWebhookPayload,
+) -> str:
+    if _is_confirmation(payload.message):
+        await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == payload.remote_jid))
+        await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == payload.remote_jid))
+        await db.commit()
+        return "Listo, borré tu memoria de conversación con Vanessa."
+
+    if _is_cancellation(payload.message):
+        reply = "Perfecto, conservo tu memoria de conversación."
+        memory.push_name = payload.push_name or memory.push_name
+        memory.resumen_perfil = _clear_memory_delete_pending(memory.resumen_perfil)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+        await db.commit()
+        return reply
+
+    reply = MEMORY_DELETE_CONFIRMATION_REPLY
+    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+    await db.commit()
+    return reply
 
 
 def _detect_service(message: str) -> str | None:

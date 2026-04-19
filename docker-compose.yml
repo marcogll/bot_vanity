@@ -10,6 +10,13 @@ services:
       DATABASE_URL: postgresql://${VANITY_DB_USER:-vanity_user}:${VANITY_DB_PASSWORD:-vanity_password}@vanessa-db:5432/${VANITY_DB_NAME:-vanity_db}
       EVOLUTION_API_URL: http://evolution-api:8080
       EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
+      EVOLUTION_INSTANCE_NAME: ${EVOLUTION_INSTANCE_NAME:-vanity-instance}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
+      AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:?AES_ENCRYPTION_KEY is required}
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      MEMORY_RETENTION_DAYS: ${MEMORY_RETENTION_DAYS:-30}
+      BOOKING_URL: ${BOOKING_URL:-https://vanitynails.fresh.com}
       PORT: 8000
     ports:
       - "8001:8000"
@@ -61,7 +68,7 @@ services:
     environment:
       SERVER_TYPE: http
       SERVER_PORT: 8080
-      SERVER_URL: ${EVOLUTION_SERVER_URL:-http://localhost:8080}
+      SERVER_URL: ${SERVICE_URL_EVOLUTION_API:-${EVOLUTION_SERVER_URL:-http://localhost:8080}}
       AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-change-me}
       DEL_INSTANCE: "false"
       CORS_ORIGIN: "*"

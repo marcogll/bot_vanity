@@ -1,4 +1,11 @@
 from app.business_rules import needs_human_handover
+from app.main import (
+    _clear_memory_delete_pending,
+    _is_cancellation,
+    _is_confirmation,
+    _is_memory_delete_trigger,
+    _mark_memory_delete_pending,
+)
 from app.pricing import estimate_from_message
 from app.security import looks_like_prompt_injection
 
@@ -17,3 +24,21 @@ def test_pricing_estimate_adds_base_retiro_and_nail_art() -> None:
     assert estimate is not None
     assert estimate.total_price == 1070
     assert estimate.total_minutes == 155
+
+
+def test_memory_delete_trigger_is_exact_command() -> None:
+    assert _is_memory_delete_trigger(" dipiridú ")
+    assert not _is_memory_delete_trigger("quiero dipiridú")
+
+
+def test_memory_delete_confirmation_words() -> None:
+    assert _is_confirmation("sí")
+    assert _is_confirmation("SI")
+    assert _is_cancellation("no")
+    assert _is_cancellation("cancelar")
+
+
+def test_memory_delete_pending_marker_preserves_summary() -> None:
+    marked = _mark_memory_delete_pending("Interés detectado: Uñas")
+
+    assert _clear_memory_delete_pending(marked) == "Interés detectado: Uñas"
