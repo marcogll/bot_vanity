@@ -269,9 +269,17 @@ async def _get_or_create_memory(
     result = await db.execute(select(SesionMemoria).where(SesionMemoria.whatsapp_id == whatsapp_id))
     memory = result.scalar_one_or_none()
     if memory:
-        if push_name and push_name != memory.push_name:
-            memory.push_name = push_name
-        return memory
+        try:
+            current_push_name = memory.push_name
+        except ValueError:
+            logger.warning("Discarding unreadable encrypted memory for %s", whatsapp_id)
+            await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == whatsapp_id))
+            await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == whatsapp_id))
+            await db.commit()
+        else:
+            if push_name and push_name != current_push_name:
+                memory.push_name = push_name
+            return memory
 
     memory = SesionMemoria(whatsapp_id=whatsapp_id, push_name=push_name)
     db.add(memory)
@@ -287,7 +295,16 @@ async def _get_recent_history(db: AsyncSession, whatsapp_id: str, limit: int = 1
         .order_by(desc(Interaccion.timestamp))
         .limit(limit)
     )
-    return list(reversed(result.scalars().all()))
+    history = list(reversed(result.scalars().all()))
+    try:
+        for item in history:
+            item.content
+    except ValueError:
+        logger.warning("Discarding unreadable encrypted history for %s", whatsapp_id)
+        await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == whatsapp_id))
+        await db.commit()
+        return []
+    return history
 
 
 async def _add_interaction_pair(

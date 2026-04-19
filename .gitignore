@@ -4,7 +4,3 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .env
-/docs/db.md
-/docs/system_prompt.md
-/docs/create_evolution_bot.md
-/docs/create_evolution_bot_instructions.md

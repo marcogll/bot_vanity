@@ -1,4 +1,5 @@
 from app.business_rules import needs_human_handover
+from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     EvolutionWebhookPayload,
     _clear_memory_delete_pending,
@@ -85,3 +86,11 @@ def test_send_reply_swallows_evolution_errors(monkeypatch) -> None:
     import asyncio
 
     asyncio.run(_send_reply(payload, "Hola"))
+
+
+def test_knowledge_engine_tolerates_missing_docs(tmp_path) -> None:
+    (tmp_path / "knowledge_base.md").write_text("Servicios", encoding="utf-8")
+
+    engine = KnowledgeEngine(str(tmp_path))
+
+    assert "Servicios" in engine.build_system_prompt(current_datetime=__import__("datetime").datetime.now())

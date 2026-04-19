@@ -1,8 +1,12 @@
 from datetime import datetime
 from functools import lru_cache
+import logging
 from pathlib import Path
 
 from app.config import get_settings
+
+
+logger = logging.getLogger("vanessa.knowledge")
 
 
 class KnowledgeEngine:
@@ -41,7 +45,7 @@ class KnowledgeEngine:
             loaded[filename] = content
 
         if missing:
-            raise FileNotFoundError(f"Missing knowledge documents: {', '.join(missing)}")
+            logger.warning("Missing knowledge documents: %s", ", ".join(missing))
 
         self._documents = loaded
 
