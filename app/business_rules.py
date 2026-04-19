@@ -22,6 +22,6 @@ def needs_human_handover(message: str) -> bool:
 
 def human_handover_reply() -> str:
     return (
-        "Con gusto. Soy Vanessa de Vanity Nail Salon; voy a pausar el flujo automático "
+        "Con gusto. Soy Sofía de Vanity Nail Salon; voy a pausar el flujo automático "
         "para que una persona del equipo tome tu conversación en breve."
     )

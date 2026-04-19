@@ -1,4 +1,4 @@
-# TASKS.md: Plan de Implementación - Proyecto Vanessa
+# TASKS.md: Plan de Implementación - Proyecto Sofía
 
 ## Fase 1: Infraestructura y Dockerización 🐳
 Configuración del entorno de ejecución en Omarchy.
@@ -58,13 +58,13 @@ Funciones específicas de Vanity Nail Salon.
 
 **Notas Fase 5:**
 - La calculadora cubre los servicios principales de `knowledge_base.md` y suma base + retiro + Nail Art cuando puede detectarlos en texto.
-- El follow-up se dispara si Vanessa envió la liga y no hay una respuesta nueva del usuario después del delay configurado.
+- El follow-up se dispara si Sofía envió la liga y no hay una respuesta nueva del usuario después del delay configurado.
 - Pendiente futuro: guardar un estado formal de cita confirmada si Fresh o Evolution proveen esa señal.
 
 ## Fase 6: QA y Pruebas de Estrés 🧪
 
 - [ ] Test de Flujo Completo: Simular flujo desde saludo hasta recepción de liga de Fresh.
-- [ ] Test de Promociones: Validar que Vanessa NO ofrezca promociones si la fecha del sistema está fuera de vigencia.
+- [ ] Test de Promociones: Validar que Sofía NO ofrezca promociones si la fecha del sistema está fuera de vigencia.
 - [x] Test de Inyección: Intentar engañar al bot para que asuma una identidad distinta o revele el system prompt.
 
 **Notas Fase 6:**

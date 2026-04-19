@@ -22,12 +22,12 @@ from app.security import looks_like_prompt_injection, validate_webhook_api_key
 
 
 logger = logging.getLogger("vanessa")
-app = FastAPI(title="Vanessa Bot Vanity", version="0.1.0")
+app = FastAPI(title="Sofía Bot Vanity", version="0.1.0")
 rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_TRIGGER = "dipiridú"
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
 MEMORY_DELETE_CONFIRMATION_REPLY = (
-    "¿Confirmas que deseas borrar tu memoria de conversación con Vanessa? "
+    "¿Confirmas que deseas borrar tu memoria de conversación con Sofía? "
     "Responde sí para borrarla o no para conservarla."
 )
 
@@ -210,7 +210,7 @@ async def _handle_webhook_payload(
 
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
-            "Soy Vanessa de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
+            "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
             "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
@@ -599,7 +599,7 @@ async def _handle_memory_delete_confirmation(
         await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == payload.remote_jid))
         await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == payload.remote_jid))
         await db.commit()
-        return "Listo, borré tu memoria de conversación con Vanessa."
+        return "Listo, borré tu memoria de conversación con Sofía."
 
     if _is_cancellation(payload.message):
         reply = "Perfecto, conservo tu memoria de conversación."
@@ -631,7 +631,7 @@ def _summarize_profile(previous: str | None, user_message: str, assistant_messag
     fragments = [fragment for fragment in [previous, f"Interés detectado: {service}" if service else None] if fragment]
     if get_settings().booking_url in assistant_message:
         fragments.append("Se envió liga de agendamiento.")
-    return " ".join(fragments)[-800:] or "Cliente inició conversación con Vanessa."
+    return " ".join(fragments)[-800:] or "Cliente inició conversación con Sofía."
 
 
 def _schedule_follow_up(whatsapp_id: str, delay_seconds: int) -> None:
@@ -649,7 +649,7 @@ async def _send_follow_up_if_no_reply(whatsapp_id: str, delay_seconds: int) -> N
     try:
         await send_text_message(
             whatsapp_id,
-            "Soy Vanessa de Vanity Nail Salon. ¿Pudiste elegir tu horario en la liga de agendamiento?",
+            "Soy Sofía de Vanity Nail Salon. ¿Pudiste elegir tu horario en la liga de agendamiento?",
         )
         logger.info("Follow-up sent to %s", whatsapp_id)
     except Exception:

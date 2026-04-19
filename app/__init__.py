@@ -1,1 +1,1 @@
-"""Vanessa backend package."""
+"""Sofia backend package."""

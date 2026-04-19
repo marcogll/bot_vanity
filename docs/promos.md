@@ -1,6 +1,6 @@
 # PROMOS.MD: Promociones y Paquetes Vigentes
 
-Este archivo contiene las ofertas temporales y los combos permanentes. Vanessa debe priorizar estos paquetes cuando detecte que el cliente busca más de un servicio o pregunta por "promociones".
+Este archivo contiene las ofertas temporales y los combos permanentes. Sofía debe priorizar estos paquetes cuando detecte que el cliente busca más de un servicio o pregunta por "promociones".
 
 ## 🤍 CAMPAÑA: HELLO APRIL (Vigencia: Abril 2026)
 *Paquetes exclusivos diseñados para la temporada de primavera. Disponibles por tiempo limitado.*

@@ -1,6 +1,6 @@
-# Vanessa Bot Vanity
+# Sofía Bot Vanity
 
-Backend FastAPI para procesar webhooks de Evolution API y responder como Vanessa,
+Backend FastAPI para procesar webhooks de Evolution API y responder como Sofía,
 asistente virtual de Vanity Nail Salon.
 
 ## Setup local en Arch/Omarchy
@@ -56,7 +56,7 @@ curl http://127.0.0.1:8001/health
 
 ## Docker
 
-Para construir la imagen de Vanessa:
+Para construir la imagen de Sofía:
 
 ```bash
 docker build -t <docker-user>/vanessa-bot-vanity:latest .
@@ -77,7 +77,7 @@ docker compose up -d --build
 El stack levanta:
 
 - `vanessa-app`: backend FastAPI.
-- `vanessa-db`: PostgreSQL de Vanessa.
+- `vanessa-db`: PostgreSQL de Sofía.
 - `evolution-api`: instancia de Evolution API v2.
 - `evolution-db`: PostgreSQL de Evolution.
 - `evolution-redis`: cache de Evolution.
@@ -96,7 +96,7 @@ http://evolution-api:8080
 
 En producción configura `EVOLUTION_SERVER_URL` con el dominio público de Evolution,
 por ejemplo `https://evo.tu-dominio.com`, y usa el mismo `EVOLUTION_API_KEY` para
-autenticar llamadas desde Vanessa hacia Evolution.
+autenticar llamadas desde Sofía hacia Evolution.
 
 Para ver logs:
 

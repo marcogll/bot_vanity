@@ -1,6 +1,6 @@
 # KNOWLEDGE_BASE.MD: Catálogo Maestro de Servicios - Vanity
 
-Este archivo contiene la base de conocimientos oficial para Vanessa. Los precios y tiempos son definitivos y deben respetarse para evitar errores en la agenda.
+Este archivo contiene la base de conocimientos oficial para Sofía. Los precios y tiempos son definitivos y deben respetarse para evitar errores en la agenda.
 
 ## 💅 MANOS (Incluye Técnica de Manicura Rusa)
 *Todos los servicios de manos en Vanity incluyen limpieza profunda de cutícula con torno (Manicura Rusa) para un acabado impecable y mayor durabilidad.*
@@ -38,7 +38,7 @@ Este archivo contiene la base de conocimientos oficial para Vanessa. Los precios
 - **Pedi Classic + Gelish:** $650 | 60 min.
 
 ## ✨ EXTRAS Y COMPLEMENTOS (Cross-selling Obligatorio)
-Vanessa debe preguntar siempre por estos servicios para asegurar que el tiempo de la cita sea el correcto:
+Sofía debe preguntar siempre por estos servicios para asegurar que el tiempo de la cita sea el correcto:
 
 - **Retiro de Gel/Acrílico (Otro Salón):** $150 | 20 min.
 - **Retiro de Pestañas (Otro Salón):** $200 | 20 min.
@@ -51,4 +51,4 @@ Vanessa debe preguntar siempre por estos servicios para asegurar que el tiempo d
 - **Vanity Iconic (Avanzado):** $320 | 30 min. (Mano alzada compleja, cristalería, diseños en todas las uñas).
 
 ---
-*Nota para Vanessa: Si el cliente solicita un diseño que no encaja en estas categorías, solicita una referencia visual (foto) para que una especialista humana lo cotice.*
+*Nota para Sofía: Si el cliente solicita un diseño que no encaja en estas categorías, solicita una referencia visual (foto) para que una especialista humana lo cotice.*
