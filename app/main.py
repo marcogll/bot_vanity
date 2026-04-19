@@ -372,9 +372,6 @@ def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
     target = _reply_target(payload)
     logger.warning("Sending WhatsApp reply: remote_jid=%s target=%s", payload.remote_jid, target)
-    if "@lid" in target:
-        logger.error("No valid WhatsApp reply target found for LID webhook: %s", payload.remote_jid)
-        return
     try:
         await send_text_message(target, reply, instance_name=payload.instance_name)
     except Exception:
@@ -392,7 +389,6 @@ def _reply_target(payload: EvolutionWebhookPayload) -> str:
 
 def _rank_reply_candidates(payload: EvolutionWebhookPayload) -> list[str]:
     connected_number = _digits_only(get_settings().evolution_connected_number)
-    fallback_number = _digits_only(get_settings().evolution_lid_reply_fallback_number)
     sender_digits = _digits_only(payload.sender or "")
     ranked: list[str] = []
     deferred: list[str] = []
@@ -415,9 +411,6 @@ def _rank_reply_candidates(payload: EvolutionWebhookPayload) -> list[str]:
             ranked.append(candidate)
 
     ranked.extend(deferred)
-    ranked_digits = {_digits_only(candidate) for candidate in ranked}
-    if fallback_number and fallback_number not in ranked_digits:
-        ranked.append(fallback_number)
     return ranked
 
 

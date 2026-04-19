@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     evolution_api_key: str = ""
     evolution_instance_name: str = "vanity-instance"
     evolution_connected_number: str = ""
-    evolution_lid_reply_fallback_number: str = ""
 
     openai_api_key: str = Field(..., min_length=1)
     llm_model: str = "gpt-4o"

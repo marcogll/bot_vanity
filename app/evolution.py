@@ -32,4 +32,6 @@ async def send_text_message(number: str, text: str, instance_name: str | None = 
 
 
 def _jid_to_number(value: str) -> str:
+    if value.endswith("@lid"):
+        return value.removeprefix("+")
     return value.split("@", 1)[0].removeprefix("+")
