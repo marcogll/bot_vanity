@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Request
@@ -34,6 +35,7 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
 class EvolutionWebhookPayload(BaseModel):
     remote_jid: str = Field(default="", alias="remoteJid")
     sender: str | None = None
+    reply_candidates: list[str] = Field(default_factory=list, alias="replyCandidates")
     push_name: str | None = Field(default=None, alias="pushName")
     instance_name: str | None = Field(default=None, alias="instanceName")
     server_url: str | None = Field(default=None, alias="serverUrl")
@@ -62,12 +64,13 @@ class EvolutionWebhookPayload(BaseModel):
         remote_jid = key.get("remoteJid") or data.get("remoteJid") or ""
         sender = data.get("sender") or data.get("participant") or key.get("participant")
         if not sender and isinstance(remote_jid, str) and "@lid" in remote_jid:
-            sender = _find_whatsapp_jid(value)
+            sender = _find_reply_identifier(value, remote_jid)
         message = data.get("message")
         media = _extract_media_metadata(message, data)
         return {
             "remoteJid": remote_jid,
             "sender": sender,
+            "replyCandidates": _find_reply_identifiers(value, remote_jid),
             "pushName": data.get("pushName") or value.get("pushName"),
             "instanceName": value.get("instance") or value.get("instanceName"),
             "serverUrl": value.get("server_url") or value.get("serverUrl"),
@@ -372,25 +375,85 @@ async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
 
 
 def _reply_target(payload: EvolutionWebhookPayload) -> str:
-    if payload.sender and "@lid" in payload.remote_jid:
-        return payload.sender
+    if "@lid" in payload.remote_jid:
+        candidates = _rank_reply_candidates(payload)
+        logger.warning("Reply candidates for %s: %s", payload.remote_jid, candidates)
+        if candidates:
+            return candidates[0]
     return payload.remote_jid
 
 
-def _find_whatsapp_jid(value: object) -> str | None:
-    stack = [value]
+def _rank_reply_candidates(payload: EvolutionWebhookPayload) -> list[str]:
+    connected_number = _digits_only(get_settings().evolution_connected_number)
+    sender_digits = _digits_only(payload.sender or "")
+    ranked: list[str] = []
+    deferred: list[str] = []
+    seen: set[str] = set()
+
+    for candidate in [*payload.reply_candidates, payload.sender]:
+        if not candidate:
+            continue
+        digits = _digits_only(candidate)
+        if not digits or digits == _digits_only(payload.remote_jid):
+            continue
+        if connected_number and digits == connected_number:
+            continue
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if sender_digits and digits == sender_digits and len(payload.reply_candidates) > 1:
+            deferred.append(candidate)
+        else:
+            ranked.append(candidate)
+
+    ranked.extend(deferred)
+    return ranked
+
+
+def _find_reply_identifier(value: object, remote_jid: str) -> str | None:
+    candidates = _find_reply_identifiers(value, remote_jid)
+    return candidates[0] if candidates else None
+
+
+def _find_reply_identifiers(value: object, remote_jid: str) -> list[str]:
+    remote_digits = _digits_only(remote_jid)
+    candidates: list[str] = []
+    seen: set[str] = set()
+    stack: list[tuple[object, str]] = [(value, "")]
     while stack:
-        current = stack.pop()
+        current, path = stack.pop()
         if isinstance(current, str):
-            if current.endswith("@s.whatsapp.net"):
-                return current
+            candidate = _reply_identifier_from_string(current)
+            if candidate and _digits_only(candidate) != remote_digits and candidate not in seen:
+                seen.add(candidate)
+                if _is_low_priority_reply_path(path):
+                    candidates.append(candidate)
+                else:
+                    candidates.insert(0, candidate)
             continue
         if isinstance(current, dict):
-            stack.extend(current.values())
+            stack.extend((item, f"{path}.{key}") for key, item in current.items())
             continue
         if isinstance(current, list):
-            stack.extend(current)
+            stack.extend((item, f"{path}[]") for item in current)
+    return candidates
+
+
+def _reply_identifier_from_string(value: str) -> str | None:
+    if value.endswith("@s.whatsapp.net"):
+        return value
+    if re.fullmatch(r"\+?\d{10,15}", value):
+        return value.removeprefix("+")
     return None
+
+
+def _is_low_priority_reply_path(path: str) -> bool:
+    lowered = path.casefold()
+    return any(token in lowered for token in ("owner", "wuid", "instance", "me"))
+
+
+def _digits_only(value: str) -> str:
+    return "".join(character for character in value if character.isdigit())
 
 
 async def _get_or_create_memory(

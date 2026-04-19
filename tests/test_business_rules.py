@@ -115,6 +115,52 @@ def test_reply_target_finds_nested_whatsapp_jid_for_lid_webhook() -> None:
     assert _reply_target(payload) == "5218441112233@s.whatsapp.net"
 
 
+def test_reply_target_prefers_non_sender_candidate_for_lid_webhook() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "sender": "5218446686100@s.whatsapp.net",
+                "message": {"conversation": "Hola"},
+                "context": {
+                    "from": "5218441026472@s.whatsapp.net",
+                    "number": "249391621378064",
+                },
+            },
+        }
+    )
+
+    assert _reply_target(payload) == "5218441026472@s.whatsapp.net"
+
+
+def test_reply_target_excludes_configured_connected_number(monkeypatch) -> None:
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("OPENAI_API_KEY", "test")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@localhost/db")
+    monkeypatch.setenv("AES_ENCRYPTION_KEY", "TUfUJuBw8Cxb-KcreZjKG0zKLGThhEUHDuuPBCV9jTk=")
+    monkeypatch.setenv("WEBHOOK_SECRET", "secret")
+    monkeypatch.setenv("EVOLUTION_CONNECTED_NUMBER", "5218446686100")
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "message": {"conversation": "Hola"},
+                "contacts": [
+                    {"jid": "5218446686100@s.whatsapp.net"},
+                    {"jid": "5218441026472@s.whatsapp.net"},
+                ],
+            },
+        }
+    )
+
+    assert _reply_target(payload) == "5218441026472@s.whatsapp.net"
+    get_settings.cache_clear()
+
+
 def test_media_caption_payload_is_flattened() -> None:
     payload = EvolutionWebhookPayload.model_validate(
         {
