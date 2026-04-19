@@ -129,14 +129,27 @@ async def webhook(
 ) -> WebhookResponse:
     del request
     if payload.from_me:
-        logger.info("Ignoring message sent by the connected WhatsApp account")
+        logger.warning("Ignoring webhook from connected WhatsApp account")
         return WebhookResponse(message="ignored")
     if not payload.remote_jid or not payload.message.strip():
-        logger.info("Ignoring webhook without readable inbound message")
+        logger.warning(
+            "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s",
+            payload.remote_jid,
+            payload.message_type,
+            payload.has_media,
+        )
         return WebhookResponse(message="ignored")
     if rate_limiter is not None:
         rate_limiter.check(payload.remote_jid)
 
+    logger.warning(
+        "Accepted webhook: remote_jid=%s sender=%s instance=%s message_type=%s has_media=%s",
+        payload.remote_jid,
+        payload.sender,
+        payload.instance_name,
+        payload.message_type,
+        payload.has_media,
+    )
     _schedule_webhook_processing(payload, settings)
     return WebhookResponse(message="accepted")
 
@@ -160,7 +173,7 @@ async def _handle_webhook_payload(
     db: AsyncSession,
     settings: Settings,
 ) -> None:
-    logger.info("Message received from %s", payload.remote_jid)
+    logger.warning("Processing webhook message from %s", payload.remote_jid)
 
     memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
     pending_delete = _memory_delete_is_pending(memory)
@@ -350,8 +363,10 @@ def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
 
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
+    target = _reply_target(payload)
+    logger.warning("Sending WhatsApp reply: remote_jid=%s target=%s", payload.remote_jid, target)
     try:
-        await send_text_message(_reply_target(payload), reply, instance_name=payload.instance_name)
+        await send_text_message(target, reply, instance_name=payload.instance_name)
     except Exception:
         logger.exception("Failed to send WhatsApp reply to %s", payload.remote_jid)
 

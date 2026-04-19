@@ -21,12 +21,14 @@ async def send_text_message(number: str, text: str, instance_name: str | None = 
     )
     payload = {"number": _jid_to_number(number), "text": text}
     headers = {"apikey": settings.evolution_api_key, "Content-Type": "application/json"}
+    logger.warning("Sending Evolution text message to %s via instance %s", payload["number"], target_instance)
 
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.post(url, json=payload, headers=headers)
         if response.is_error:
             logger.error("Evolution sendText failed: %s %s", response.status_code, response.text)
         response.raise_for_status()
+        logger.warning("Evolution sendText succeeded for %s", payload["number"])
 
 
 def _jid_to_number(value: str) -> str:
