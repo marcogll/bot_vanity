@@ -20,11 +20,6 @@ services:
       PORT: 8000
     ports:
       - "8001:8000"
-    depends_on:
-      vanessa-db:
-        condition: service_healthy
-      evolution-api:
-        condition: service_started
     networks:
       - vanity-net
     healthcheck:
@@ -101,11 +96,6 @@ services:
       - "8080"
     volumes:
       - evolution_instances:/evolution/instances
-    depends_on:
-      evolution-db:
-        condition: service_healthy
-      evolution-redis:
-        condition: service_healthy
     networks:
       - vanity-net
 
