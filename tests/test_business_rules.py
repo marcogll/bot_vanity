@@ -161,6 +161,24 @@ def test_reply_target_excludes_configured_connected_number(monkeypatch) -> None:
     get_settings.cache_clear()
 
 
+def test_reply_target_ignores_timestamps_for_lid_webhook() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "message": {"conversation": "Hola"},
+                "messageTimestamp": "1776310851",
+                "createdAt": "1776619474",
+                "updatedAt": "1775778671",
+            },
+        }
+    )
+
+    assert payload.reply_candidates == []
+    assert _reply_target(payload) == "249391621378064@lid"
+
+
 def test_media_caption_payload_is_flattened() -> None:
     payload = EvolutionWebhookPayload.model_validate(
         {

@@ -368,6 +368,9 @@ def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
     target = _reply_target(payload)
     logger.warning("Sending WhatsApp reply: remote_jid=%s target=%s", payload.remote_jid, target)
+    if "@lid" in target:
+        logger.error("No valid WhatsApp reply target found for LID webhook: %s", payload.remote_jid)
+        return
     try:
         await send_text_message(target, reply, instance_name=payload.instance_name)
     except Exception:
@@ -423,7 +426,7 @@ def _find_reply_identifiers(value: object, remote_jid: str) -> list[str]:
     while stack:
         current, path = stack.pop()
         if isinstance(current, str):
-            candidate = _reply_identifier_from_string(current)
+            candidate = _reply_identifier_from_string(current, path)
             if candidate and _digits_only(candidate) != remote_digits and candidate not in seen:
                 seen.add(candidate)
                 if _is_low_priority_reply_path(path):
@@ -439,12 +442,19 @@ def _find_reply_identifiers(value: object, remote_jid: str) -> list[str]:
     return candidates
 
 
-def _reply_identifier_from_string(value: str) -> str | None:
+def _reply_identifier_from_string(value: str, path: str = "") -> str | None:
+    if _is_rejected_reply_path(path):
+        return None
     if value.endswith("@s.whatsapp.net"):
         return value
-    if re.fullmatch(r"\+?\d{10,15}", value):
+    if re.fullmatch(r"\+?\d{11,15}", value):
         return value.removeprefix("+")
     return None
+
+
+def _is_rejected_reply_path(path: str) -> bool:
+    lowered = path.casefold()
+    return any(token in lowered for token in ("timestamp", "time", "date", "created", "updated"))
 
 
 def _is_low_priority_reply_path(path: str) -> bool:
