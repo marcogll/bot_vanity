@@ -197,6 +197,10 @@ async def _handle_webhook_payload(
         logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
         return
 
+    if _is_sender_debug_command(payload.message):
+        await _send_reply(payload, _build_sender_debug_reply(payload))
+        return
+
     if needs_human_handover(payload.message):
         reply = human_handover_reply()
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
@@ -388,6 +392,7 @@ def _reply_target(payload: EvolutionWebhookPayload) -> str:
 
 def _rank_reply_candidates(payload: EvolutionWebhookPayload) -> list[str]:
     connected_number = _digits_only(get_settings().evolution_connected_number)
+    fallback_number = _digits_only(get_settings().evolution_lid_reply_fallback_number)
     sender_digits = _digits_only(payload.sender or "")
     ranked: list[str] = []
     deferred: list[str] = []
@@ -410,6 +415,9 @@ def _rank_reply_candidates(payload: EvolutionWebhookPayload) -> list[str]:
             ranked.append(candidate)
 
     ranked.extend(deferred)
+    ranked_digits = {_digits_only(candidate) for candidate in ranked}
+    if fallback_number and fallback_number not in ranked_digits:
+        ranked.append(fallback_number)
     return ranked
 
 
@@ -536,6 +544,23 @@ async def _persist_interaction(
 
 def _is_memory_delete_trigger(message: str) -> bool:
     return message.strip().casefold() == MEMORY_DELETE_TRIGGER
+
+
+def _is_sender_debug_command(message: str) -> bool:
+    return message.strip().casefold() in {"debug sender", "sender"}
+
+
+def _build_sender_debug_reply(payload: EvolutionWebhookPayload) -> str:
+    target = _reply_target(payload)
+    return (
+        "Debug sender\n"
+        f"remote_jid: {payload.remote_jid}\n"
+        f"sender: {payload.sender or 'None'}\n"
+        f"reply_candidates: {payload.reply_candidates or []}\n"
+        f"target: {target}\n"
+        f"instance: {payload.instance_name or 'None'}\n"
+        f"message_type: {payload.message_type or 'None'}"
+    )
 
 
 def _memory_delete_is_pending(memory: SesionMemoria) -> bool:
