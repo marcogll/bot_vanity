@@ -39,6 +39,10 @@ class EvolutionWebhookPayload(BaseModel):
     server_url: str | None = Field(default=None, alias="serverUrl")
     api_key: str | None = Field(default=None, alias="apiKey")
     message: str = ""
+    message_type: str | None = Field(default=None, alias="messageType")
+    media_mimetype: str | None = Field(default=None, alias="mediaMimetype")
+    media_filename: str | None = Field(default=None, alias="mediaFilename")
+    has_media: bool = Field(default=False, alias="hasMedia")
     session_id: str | None = Field(default=None, alias="sessionId")
     from_me: bool = Field(default=False, alias="fromMe")
 
@@ -57,6 +61,8 @@ class EvolutionWebhookPayload(BaseModel):
         key = data.get("key") if isinstance(data.get("key"), dict) else {}
         remote_jid = key.get("remoteJid") or data.get("remoteJid") or ""
         sender = data.get("sender") or data.get("participant") or key.get("participant")
+        message = data.get("message")
+        media = _extract_media_metadata(message, data)
         return {
             "remoteJid": remote_jid,
             "sender": sender,
@@ -64,7 +70,11 @@ class EvolutionWebhookPayload(BaseModel):
             "instanceName": value.get("instance") or value.get("instanceName"),
             "serverUrl": value.get("server_url") or value.get("serverUrl"),
             "apiKey": value.get("apikey") or value.get("apiKey"),
-            "message": _extract_message_text(data.get("message")),
+            "message": _extract_message_text(message, data),
+            "messageType": data.get("messageType") or media["message_type"],
+            "mediaMimetype": media["mimetype"],
+            "mediaFilename": media["filename"],
+            "hasMedia": media["has_media"],
             "sessionId": key.get("id") or data.get("id"),
             "fromMe": bool(key.get("fromMe", False)),
         }
@@ -256,11 +266,12 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str:
     return (
         f"Nombre WhatsApp: {payload.push_name or 'No disponible'}\n"
         f"Mensaje: {payload.message}"
+        f"{_media_prompt_hint(payload)}"
         f"{estimate_hint}"
     )
 
 
-def _extract_message_text(message: object) -> str:
+def _extract_message_text(message: object, data: dict[str, object] | None = None) -> str:
     if isinstance(message, str):
         return message
     if not isinstance(message, dict):
@@ -279,7 +290,60 @@ def _extract_message_text(message: object) -> str:
         if isinstance(media, dict) and isinstance(media.get("caption"), str):
             return media["caption"]
 
+    media = _extract_media_metadata(message, data or {})
+    if media["has_media"]:
+        label = media["message_type"] or "archivo"
+        return f"[Archivo recibido: {label}]"
+
     return ""
+
+
+def _extract_media_metadata(message: object, data: dict[str, object] | None = None) -> dict[str, object]:
+    data = data or {}
+    message_type = data.get("messageType")
+    if not isinstance(message_type, str):
+        message_type = None
+
+    if isinstance(message, dict):
+        for key in ("imageMessage", "videoMessage", "documentMessage", "audioMessage", "stickerMessage"):
+            media = message.get(key)
+            if not isinstance(media, dict):
+                continue
+            return {
+                "has_media": True,
+                "message_type": message_type or key,
+                "mimetype": media.get("mimetype") if isinstance(media.get("mimetype"), str) else None,
+                "filename": media.get("fileName") if isinstance(media.get("fileName"), str) else None,
+            }
+
+        if "base64" in message:
+            return {
+                "has_media": True,
+                "message_type": message_type or "base64",
+                "mimetype": None,
+                "filename": None,
+            }
+
+    if "base64" in data:
+        return {
+            "has_media": True,
+            "message_type": message_type or "base64",
+            "mimetype": None,
+            "filename": None,
+        }
+
+    return {"has_media": False, "message_type": message_type, "mimetype": None, "filename": None}
+
+
+def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
+    if not payload.has_media:
+        return ""
+    details = [payload.message_type or "archivo"]
+    if payload.media_mimetype:
+        details.append(payload.media_mimetype)
+    if payload.media_filename:
+        details.append(payload.media_filename)
+    return f"\nArchivo adjunto detectado: {' | '.join(details)}"
 
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:

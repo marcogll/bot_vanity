@@ -7,6 +7,7 @@ from app.main import (
     _is_confirmation,
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
+    _media_prompt_hint,
     _reply_target,
     _send_reply,
 )
@@ -85,6 +86,52 @@ def test_reply_target_prefers_sender_for_lid_webhook() -> None:
     )
 
     assert _reply_target(payload) == "5218441112233@s.whatsapp.net"
+
+
+def test_media_caption_payload_is_flattened() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "5218446686100@s.whatsapp.net", "fromMe": False},
+                "messageType": "imageMessage",
+                "message": {
+                    "imageMessage": {
+                        "caption": "Quiero este diseño",
+                        "mimetype": "image/jpeg",
+                    }
+                },
+            },
+        }
+    )
+
+    assert payload.message == "Quiero este diseño"
+    assert payload.has_media
+    assert payload.message_type == "imageMessage"
+    assert "image/jpeg" in _media_prompt_hint(payload)
+
+
+def test_base64_media_without_caption_becomes_safe_text() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "5218446686100@s.whatsapp.net", "fromMe": False},
+                "messageType": "documentMessage",
+                "message": {
+                    "documentMessage": {
+                        "mimetype": "application/pdf",
+                        "fileName": "referencia.pdf",
+                    },
+                    "base64": "JVBERi0x",
+                },
+            },
+        }
+    )
+
+    assert payload.message == "[Archivo recibido: documentMessage]"
+    assert payload.has_media
+    assert payload.media_filename == "referencia.pdf"
 
 
 async def _failing_send_text_message(*args: object, **kwargs: object) -> None:

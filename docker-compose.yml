@@ -78,7 +78,7 @@ services:
       WEBHOOK_GLOBAL_ENABLED: "true"
       WEBHOOK_GLOBAL_URL: http://vanessa-app:8000/webhook?apiKey=${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
       WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS: "false"
-      WEBHOOK_GLOBAL_WEBHOOK_BASE64: "false"
+      WEBHOOK_GLOBAL_WEBHOOK_BASE64: "true"
       WEBHOOK_EVENTS_MESSAGES_UPSERT: "true"
       DATABASE_ENABLED: "true"
       DATABASE_PROVIDER: postgresql
