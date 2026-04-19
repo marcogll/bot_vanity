@@ -40,6 +40,9 @@ def validate_webhook_api_key(func: F) -> F:
         candidates = [
             request.headers.get("x-api-key"),
             request.headers.get("apikey"),
+            request.query_params.get("x-api-key"),
+            request.query_params.get("apikey"),
+            request.query_params.get("apiKey"),
             _bearer_token(request.headers.get("authorization")),
         ]
         if payload is not None:

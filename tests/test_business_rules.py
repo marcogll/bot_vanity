@@ -1,5 +1,6 @@
 from app.business_rules import needs_human_handover
 from app.main import (
+    EvolutionWebhookPayload,
     _clear_memory_delete_pending,
     _is_cancellation,
     _is_confirmation,
@@ -42,3 +43,27 @@ def test_memory_delete_pending_marker_preserves_summary() -> None:
     marked = _mark_memory_delete_pending("Interés detectado: Uñas")
 
     assert _clear_memory_delete_pending(marked) == "Interés detectado: Uñas"
+
+
+def test_evolution_messages_upsert_payload_is_flattened() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "event": "messages.upsert",
+            "instance": "sofia",
+            "data": {
+                "key": {
+                    "remoteJid": "5218446686100@s.whatsapp.net",
+                    "fromMe": False,
+                    "id": "ABC123",
+                },
+                "pushName": "Sofia",
+                "message": {"conversation": "Hola"},
+            },
+        }
+    )
+
+    assert payload.remote_jid == "5218446686100@s.whatsapp.net"
+    assert payload.push_name == "Sofia"
+    assert payload.instance_name == "sofia"
+    assert payload.message == "Hola"
+    assert not payload.from_me

@@ -2,9 +2,9 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, Request
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,13 +32,38 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
 
 
 class EvolutionWebhookPayload(BaseModel):
-    remote_jid: str = Field(alias="remoteJid")
+    remote_jid: str = Field(default="", alias="remoteJid")
     push_name: str | None = Field(default=None, alias="pushName")
     instance_name: str | None = Field(default=None, alias="instanceName")
     server_url: str | None = Field(default=None, alias="serverUrl")
     api_key: str | None = Field(default=None, alias="apiKey")
-    message: str
+    message: str = ""
     session_id: str | None = Field(default=None, alias="sessionId")
+    from_me: bool = Field(default=False, alias="fromMe")
+
+    @model_validator(mode="before")
+    @classmethod
+    def flatten_evolution_payload(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        if "remoteJid" in value and "message" in value:
+            return value
+
+        data = value.get("data")
+        if not isinstance(data, dict):
+            return value
+
+        key = data.get("key") if isinstance(data.get("key"), dict) else {}
+        return {
+            "remoteJid": key.get("remoteJid") or data.get("remoteJid") or "",
+            "pushName": data.get("pushName") or value.get("pushName"),
+            "instanceName": value.get("instance") or value.get("instanceName"),
+            "serverUrl": value.get("server_url") or value.get("serverUrl"),
+            "apiKey": value.get("apikey") or value.get("apiKey"),
+            "message": _extract_message_text(data.get("message")),
+            "sessionId": key.get("id") or data.get("id"),
+            "fromMe": bool(key.get("fromMe", False)),
+        }
 
 
 class WebhookResponse(BaseModel):
@@ -84,8 +109,12 @@ async def webhook(
     settings: Settings = Depends(get_settings),
 ) -> WebhookResponse:
     del request
-    if not payload.message.strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="message is required")
+    if payload.from_me:
+        logger.info("Ignoring message sent by the connected WhatsApp account")
+        return WebhookResponse(message="ignored")
+    if not payload.remote_jid or not payload.message.strip():
+        logger.info("Ignoring webhook without readable inbound message")
+        return WebhookResponse(message="ignored")
     if rate_limiter is not None:
         rate_limiter.check(payload.remote_jid)
 
@@ -100,17 +129,20 @@ async def webhook(
         memory.resumen_perfil = _mark_memory_delete_pending(memory.resumen_perfil)
         await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
         await db.commit()
+        await _send_reply(payload, reply)
         logger.info("Memory delete confirmation requested by %s", payload.remote_jid)
         return WebhookResponse(message=reply)
 
     if pending_delete:
         response_text = await _handle_memory_delete_confirmation(db, memory, payload)
+        await _send_reply(payload, response_text)
         logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
         return WebhookResponse(message=response_text)
 
     if needs_human_handover(payload.message):
         reply = human_handover_reply()
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
+        await _send_reply(payload, reply)
         logger.info("Human handover requested by %s", payload.remote_jid)
         return WebhookResponse(message=reply)
 
@@ -120,6 +152,7 @@ async def webhook(
             "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
+        await _send_reply(payload, safe_reply)
         return WebhookResponse(message=safe_reply)
 
     history = await _get_recent_history(db, payload.remote_jid)
@@ -140,6 +173,7 @@ async def webhook(
     if sent_booking_url:
         _schedule_follow_up(payload.remote_jid, settings.follow_up_delay_seconds)
 
+    await _send_reply(payload, response_text)
     logger.info("Response generated for %s", payload.remote_jid)
     return WebhookResponse(message=response_text)
 
@@ -191,6 +225,32 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str:
         f"Mensaje: {payload.message}"
         f"{estimate_hint}"
     )
+
+
+def _extract_message_text(message: object) -> str:
+    if isinstance(message, str):
+        return message
+    if not isinstance(message, dict):
+        return ""
+
+    conversation = message.get("conversation")
+    if isinstance(conversation, str):
+        return conversation
+
+    extended = message.get("extendedTextMessage")
+    if isinstance(extended, dict) and isinstance(extended.get("text"), str):
+        return extended["text"]
+
+    for key in ("imageMessage", "videoMessage", "documentMessage"):
+        media = message.get(key)
+        if isinstance(media, dict) and isinstance(media.get("caption"), str):
+            return media["caption"]
+
+    return ""
+
+
+async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
+    await send_text_message(payload.remote_jid, reply, instance_name=payload.instance_name)
 
 
 async def _get_or_create_memory(
