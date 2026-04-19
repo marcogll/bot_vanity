@@ -61,6 +61,8 @@ class EvolutionWebhookPayload(BaseModel):
         key = data.get("key") if isinstance(data.get("key"), dict) else {}
         remote_jid = key.get("remoteJid") or data.get("remoteJid") or ""
         sender = data.get("sender") or data.get("participant") or key.get("participant")
+        if not sender and isinstance(remote_jid, str) and "@lid" in remote_jid:
+            sender = _find_whatsapp_jid(value)
         message = data.get("message")
         media = _extract_media_metadata(message, data)
         return {
@@ -358,6 +360,22 @@ def _reply_target(payload: EvolutionWebhookPayload) -> str:
     if payload.sender and "@lid" in payload.remote_jid:
         return payload.sender
     return payload.remote_jid
+
+
+def _find_whatsapp_jid(value: object) -> str | None:
+    stack = [value]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, str):
+            if current.endswith("@s.whatsapp.net"):
+                return current
+            continue
+        if isinstance(current, dict):
+            stack.extend(current.values())
+            continue
+        if isinstance(current, list):
+            stack.extend(current)
+    return None
 
 
 async def _get_or_create_memory(

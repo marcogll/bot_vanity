@@ -93,6 +93,28 @@ def test_reply_target_prefers_sender_for_lid_webhook() -> None:
     assert _reply_target(payload) == "5218441112233@s.whatsapp.net"
 
 
+def test_reply_target_finds_nested_whatsapp_jid_for_lid_webhook() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "message": {"conversation": "Hola"},
+                "metadata": {
+                    "contacts": [
+                        {
+                            "jid": "5218441112233@s.whatsapp.net",
+                            "number": "249391621378064",
+                        }
+                    ]
+                },
+            },
+        }
+    )
+
+    assert _reply_target(payload) == "5218441112233@s.whatsapp.net"
+
+
 def test_media_caption_payload_is_flattened() -> None:
     payload = EvolutionWebhookPayload.model_validate(
         {
