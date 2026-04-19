@@ -19,7 +19,7 @@ async def send_text_message(number: str, text: str, instance_name: str | None = 
         f"{settings.evolution_api_url.rstrip('/')}"
         f"/message/sendText/{target_instance}"
     )
-    payload = {"number": _jid_to_number(number), "textMessage": {"text": text}}
+    payload = {"number": _jid_to_number(number), "text": text}
     headers = {"apikey": settings.evolution_api_key, "Content-Type": "application/json"}
 
     async with httpx.AsyncClient(timeout=20) as client:

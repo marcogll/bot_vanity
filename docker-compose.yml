@@ -20,8 +20,6 @@ services:
       PORT: 8000
     ports:
       - "8001:8000"
-    volumes:
-      - ./docs:/app/docs:ro
     depends_on:
       vanessa-db:
         condition: service_healthy
