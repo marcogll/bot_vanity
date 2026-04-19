@@ -33,6 +33,7 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
 
 class EvolutionWebhookPayload(BaseModel):
     remote_jid: str = Field(default="", alias="remoteJid")
+    sender: str | None = None
     push_name: str | None = Field(default=None, alias="pushName")
     instance_name: str | None = Field(default=None, alias="instanceName")
     server_url: str | None = Field(default=None, alias="serverUrl")
@@ -54,8 +55,11 @@ class EvolutionWebhookPayload(BaseModel):
             return value
 
         key = data.get("key") if isinstance(data.get("key"), dict) else {}
+        remote_jid = key.get("remoteJid") or data.get("remoteJid") or ""
+        sender = data.get("sender") or data.get("participant") or key.get("participant")
         return {
-            "remoteJid": key.get("remoteJid") or data.get("remoteJid") or "",
+            "remoteJid": remote_jid,
+            "sender": sender,
             "pushName": data.get("pushName") or value.get("pushName"),
             "instanceName": value.get("instance") or value.get("instanceName"),
             "serverUrl": value.get("server_url") or value.get("serverUrl"),
@@ -256,9 +260,15 @@ def _extract_message_text(message: object) -> str:
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
     try:
-        await send_text_message(payload.remote_jid, reply, instance_name=payload.instance_name)
+        await send_text_message(_reply_target(payload), reply, instance_name=payload.instance_name)
     except Exception:
         logger.exception("Failed to send WhatsApp reply to %s", payload.remote_jid)
+
+
+def _reply_target(payload: EvolutionWebhookPayload) -> str:
+    if payload.sender and "@lid" in payload.remote_jid:
+        return payload.sender
+    return payload.remote_jid
 
 
 async def _get_or_create_memory(

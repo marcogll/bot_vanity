@@ -7,6 +7,7 @@ from app.main import (
     _is_confirmation,
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
+    _reply_target,
     _send_reply,
 )
 from app.pricing import estimate_from_message
@@ -69,6 +70,21 @@ def test_evolution_messages_upsert_payload_is_flattened() -> None:
     assert payload.instance_name == "sofia"
     assert payload.message == "Hola"
     assert not payload.from_me
+
+
+def test_reply_target_prefers_sender_for_lid_webhook() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "123456789@lid", "fromMe": False},
+                "sender": "5218441112233@s.whatsapp.net",
+                "message": {"conversation": "Hola"},
+            },
+        }
+    )
+
+    assert _reply_target(payload) == "5218441112233@s.whatsapp.net"
 
 
 async def _failing_send_text_message(*args: object, **kwargs: object) -> None:
