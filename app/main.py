@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.business_rules import human_handover_reply, needs_human_handover
 from app.config import Settings, get_settings
-from app.database import AsyncSessionLocal, close_db, get_db_session, init_db
+from app.database import AsyncSessionLocal, close_db, init_db
 from app.evolution import send_text_message
 from app.janitor import janitor_loop
 from app.knowledge_engine import get_knowledge_engine
@@ -87,6 +87,7 @@ async def startup() -> None:
         janitor_loop(settings.janitor_interval_seconds)
     )
     app.state.followup_tasks = set()
+    app.state.webhook_tasks = set()
 
 
 @app.on_event("shutdown")
@@ -95,6 +96,8 @@ async def shutdown() -> None:
     if janitor_task:
         janitor_task.cancel()
     for task in getattr(app.state, "followup_tasks", set()):
+        task.cancel()
+    for task in getattr(app.state, "webhook_tasks", set()):
         task.cancel()
     await close_db()
 
@@ -109,7 +112,6 @@ async def health() -> dict[str, str]:
 async def webhook(
     request: Request,
     payload: EvolutionWebhookPayload,
-    db: AsyncSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> WebhookResponse:
     del request
@@ -122,6 +124,29 @@ async def webhook(
     if rate_limiter is not None:
         rate_limiter.check(payload.remote_jid)
 
+    _schedule_webhook_processing(payload, settings)
+    return WebhookResponse(message="accepted")
+
+
+def _schedule_webhook_processing(payload: EvolutionWebhookPayload, settings: Settings) -> None:
+    task = asyncio.create_task(_process_webhook_payload(payload, settings))
+    app.state.webhook_tasks.add(task)
+    task.add_done_callback(app.state.webhook_tasks.discard)
+
+
+async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: Settings) -> None:
+    async with AsyncSessionLocal() as db:
+        try:
+            await _handle_webhook_payload(payload, db, settings)
+        except Exception:
+            logger.exception("Webhook processing failed for %s", payload.remote_jid)
+
+
+async def _handle_webhook_payload(
+    payload: EvolutionWebhookPayload,
+    db: AsyncSession,
+    settings: Settings,
+) -> None:
     logger.info("Message received from %s", payload.remote_jid)
 
     memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
@@ -135,20 +160,20 @@ async def webhook(
         await db.commit()
         await _send_reply(payload, reply)
         logger.info("Memory delete confirmation requested by %s", payload.remote_jid)
-        return WebhookResponse(message=reply)
+        return
 
     if pending_delete:
         response_text = await _handle_memory_delete_confirmation(db, memory, payload)
         await _send_reply(payload, response_text)
         logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
-        return WebhookResponse(message=response_text)
+        return
 
     if needs_human_handover(payload.message):
         reply = human_handover_reply()
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
         await _send_reply(payload, reply)
         logger.info("Human handover requested by %s", payload.remote_jid)
-        return WebhookResponse(message=reply)
+        return
 
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
@@ -157,7 +182,7 @@ async def webhook(
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
         await _send_reply(payload, safe_reply)
-        return WebhookResponse(message=safe_reply)
+        return
 
     history = await _get_recent_history(db, payload.remote_jid)
 
@@ -179,7 +204,6 @@ async def webhook(
 
     await _send_reply(payload, response_text)
     logger.info("Response generated for %s", payload.remote_jid)
-    return WebhookResponse(message=response_text)
 
 
 async def _ask_vanessa(
