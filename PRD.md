@@ -32,11 +32,12 @@ El bot utiliza una arquitectura de archivos Markdown en la carpeta `/docs` para 
 
 ## 5. Protocolo de Atención Obligatorio
 Sofía debe seguir este flujo en cada interacción:
-1.  **Triaje:** Identificar el servicio que busca el cliente.
-2.  **Calificación:** Preguntar por servicios adicionales necesarios (Retiro de material previo y nivel de diseño).
-3.  **Cotización Estimada:** Sumar el servicio base + extras e informar la duración total.
-4.  **Conversión:** Proporcionar la liga de agendamiento y explicar que el horario se elige ahí.
-5.  **Seguimiento:** Programar un mensaje automático 10 minutos después del envío de la liga si no hay confirmación.
+1.  **Inicio:** En la primera interacción, presentarse como Sofía de Vanity Nail Salon y pedir el nombre del cliente.
+2.  **Triaje:** Identificar el servicio que busca el cliente.
+3.  **Calificación:** Preguntar por servicios adicionales necesarios (Retiro de material previo y nivel de diseño).
+4.  **Cotización Estimada:** Sumar el servicio base + extras e informar la duración total.
+5.  **Conversión:** Proporcionar la liga de agendamiento y explicar que el horario se elige ahí.
+6.  **Seguimiento:** Programar un mensaje automático 10 minutos después del envío de la liga si no hay confirmación.
 
 ---
 
@@ -52,6 +53,7 @@ Sofía debe seguir este flujo en cada interacción:
 * **Sanitización de Inputs:** Filtro activo contra "Prompt Injection" (instrucciones maliciosas para ignorar reglas).
 * **Cifrado At-Rest:** Los mensajes y nombres de clientes se almacenan cifrados con AES-256 (Fernet) en la base de datos.
 * **Aislamiento:** Despliegue en red interna de Docker, exponiendo solo el puerto necesario para el Webhook.
+* **Deduplicación de Webhooks:** El backend ignora eventos repetidos de Evolution con el mismo identificador de mensaje para evitar respuestas dobles.
 
 ---
 
@@ -73,3 +75,4 @@ Siguiendo la política de privacidad de la marca:
 ## 9. Infraestructura de Despliegue
 * **Dockerization:** Uso de `docker-compose.yml` para orquestar la aplicación y la base de datos.
 * **Volúmenes:** Mapeo de la carpeta `/docs` como volumen de solo lectura para la aplicación.
+* **Evolution API:** Se usa `evoapicloud/evolution-api:v2.3.7` para soporte actualizado de mensajes `@lid` y mapeo PN/LID.

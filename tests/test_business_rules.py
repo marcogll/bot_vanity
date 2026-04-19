@@ -2,6 +2,7 @@ from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     EvolutionWebhookPayload,
+    INITIAL_GREETING_REPLY,
     _clear_memory_delete_pending,
     _is_cancellation,
     _is_confirmation,
@@ -10,6 +11,8 @@ from app.main import (
     _media_prompt_hint,
     _reply_target,
     _send_reply,
+    _should_send_initial_greeting,
+    _webhook_dedupe_key,
 )
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
@@ -76,6 +79,34 @@ def test_evolution_messages_upsert_payload_is_flattened() -> None:
     assert payload.instance_name == "sofia"
     assert payload.message == "Hola"
     assert not payload.from_me
+
+
+def test_webhook_dedupe_key_uses_instance_chat_and_message_id() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {
+                    "remoteJid": "5218441026472@s.whatsapp.net",
+                    "fromMe": False,
+                    "id": "ABC123",
+                },
+                "message": {"conversation": "Hola"},
+            },
+        }
+    )
+
+    assert _webhook_dedupe_key(payload) == "sofia:5218441026472@s.whatsapp.net:ABC123"
+
+
+def test_initial_greeting_is_used_only_without_history_or_memory() -> None:
+    empty_memory = type("Memory", (), {"resumen_perfil": None})()
+    existing_memory = type("Memory", (), {"resumen_perfil": "Cliente inició conversación con Sofía."})()
+
+    assert _should_send_initial_greeting([], empty_memory)
+    assert not _should_send_initial_greeting([], existing_memory)
+    assert "Soy Sofía" in INITIAL_GREETING_REPLY
+    assert "nombre" in INITIAL_GREETING_REPLY
 
 
 def test_reply_target_prefers_sender_for_lid_webhook() -> None:

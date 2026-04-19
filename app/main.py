@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from collections import OrderedDict
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, Request
@@ -30,6 +31,11 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
     "¿Confirmas que deseas borrar tu memoria de conversación con Sofía? "
     "Responde sí para borrarla o no para conservarla."
 )
+INITIAL_GREETING_REPLY = (
+    "¡Hola! Soy Sofía, la asistente de Vanity Nail Salon. "
+    "¿Me compartes tu nombre para atenderte mejor? También cuéntame qué servicio buscas: uñas, pestañas o cejas."
+)
+MAX_PROCESSED_WEBHOOK_IDS = 1000
 
 
 class EvolutionWebhookPayload(BaseModel):
@@ -105,6 +111,7 @@ async def startup() -> None:
     )
     app.state.followup_tasks = set()
     app.state.webhook_tasks = set()
+    app.state.processed_webhook_ids = OrderedDict()
 
 
 @app.on_event("shutdown")
@@ -146,6 +153,13 @@ async def webhook(
         return WebhookResponse(message="ignored")
     if rate_limiter is not None:
         rate_limiter.check(payload.remote_jid)
+    if _is_duplicate_webhook(payload):
+        logger.warning(
+            "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
+            payload.remote_jid,
+            payload.session_id,
+        )
+        return WebhookResponse(message="duplicate")
 
     logger.warning(
         "Accepted webhook: remote_jid=%s sender=%s instance=%s message_type=%s has_media=%s",
@@ -163,6 +177,28 @@ def _schedule_webhook_processing(payload: EvolutionWebhookPayload, settings: Set
     task = asyncio.create_task(_process_webhook_payload(payload, settings))
     app.state.webhook_tasks.add(task)
     task.add_done_callback(app.state.webhook_tasks.discard)
+
+
+def _is_duplicate_webhook(payload: EvolutionWebhookPayload) -> bool:
+    dedupe_key = _webhook_dedupe_key(payload)
+    if not dedupe_key:
+        return False
+    processed: OrderedDict[str, None] = getattr(app.state, "processed_webhook_ids", OrderedDict())
+    app.state.processed_webhook_ids = processed
+    if dedupe_key in processed:
+        processed.move_to_end(dedupe_key)
+        return True
+    processed[dedupe_key] = None
+    while len(processed) > MAX_PROCESSED_WEBHOOK_IDS:
+        processed.popitem(last=False)
+    return False
+
+
+def _webhook_dedupe_key(payload: EvolutionWebhookPayload) -> str | None:
+    if not payload.session_id:
+        return None
+    instance = payload.instance_name or "default"
+    return f"{instance}:{payload.remote_jid}:{payload.session_id}"
 
 
 async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: Settings) -> None:
@@ -220,6 +256,11 @@ async def _handle_webhook_payload(
         return
 
     history = await _get_recent_history(db, payload.remote_jid)
+    if _should_send_initial_greeting(history, memory):
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY)
+        await _send_reply(payload, INITIAL_GREETING_REPLY)
+        logger.info("Initial greeting sent to %s", payload.remote_jid)
+        return
 
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
@@ -294,6 +335,10 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str:
         f"{_media_prompt_hint(payload)}"
         f"{estimate_hint}"
     )
+
+
+def _should_send_initial_greeting(history: list[Interaccion], memory: SesionMemoria) -> bool:
+    return not history and not memory.resumen_perfil
 
 
 def _extract_message_text(message: object, data: dict[str, object] | None = None) -> str:

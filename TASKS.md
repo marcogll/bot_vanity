@@ -18,6 +18,7 @@ Configuración del entorno de ejecución en Omarchy.
 Desarrollo de la lógica del servidor y procesamiento de mensajes.
 
 - [x] Validación de Webhooks: Implementar middleware para verificar el `WEBHOOK_SECRET` de Evolution API.
+- [x] Deduplicación de Webhooks: Ignorar eventos repetidos con el mismo `key.id` de Evolution para evitar respuestas dobles.
 - [x] Markdown Parser: Desarrollar el cargador dinámico de los archivos en `/docs` para alimentar el contexto de la IA.
 - [x] Integración LLM: Configurar el cliente de OpenAI (GPT-4o) con el flujo de RAG básico.
 - [x] Inyección de Fecha: Programar que cada mensaje enviado al LLM incluya la fecha y hora actual del servidor para validar `promos.md`.
@@ -25,6 +26,7 @@ Desarrollo de la lógica del servidor y procesamiento de mensajes.
 **Notas Fase 2:**
 - El cargador RAG soporta `docs/create_evolution_bot.md` y `docs/create_evolution_bot_instructions.md` para evitar romper si cambia el nombre del documento.
 - El webhook espera el payload plano documentado por Evolution API y responde `{ "message": "..." }`.
+- La deduplicación es en memoria por proceso y usa `instance + remote_jid + session_id`; si se escala a múltiples réplicas debe moverse a Redis o DB.
 
 ## Fase 3: Seguridad y "Hardening" 🛡️
 Protección del sistema y de los datos del cliente.
@@ -53,11 +55,13 @@ Gestión de la base de datos y la política de 30 días.
 Funciones específicas de Vanity Nail Salon.
 
 - [x] Calculadora de Precios: Asegurar que la IA sume correctamente (Base + Retiro + Nail Art) basándose en `knowledge_base.md`.
+- [x] Saludo Inicial: Presentarse como Sofía y pedir el nombre del cliente en la primera interacción.
 - [x] Background Task (Follow-up): Configurar el temporizador de 10 minutos para enviar el mensaje de seguimiento si no hay confirmación de cita.
 - [x] Human Handover: Lógica para detectar palabras clave de frustración y pausar el bot.
 
 **Notas Fase 5:**
 - La calculadora cubre los servicios principales de `knowledge_base.md` y suma base + retiro + Nail Art cuando puede detectarlos en texto.
+- El primer mensaje de una conversación nueva no llama al LLM; guarda el mensaje y responde con el saludo fijo para pedir nombre.
 - El follow-up se dispara si Sofía envió la liga y no hay una respuesta nueva del usuario después del delay configurado.
 - Pendiente futuro: guardar un estado formal de cita confirmada si Fresh o Evolution proveen esa señal.
 
@@ -66,8 +70,10 @@ Funciones específicas de Vanity Nail Salon.
 - [ ] Test de Flujo Completo: Simular flujo desde saludo hasta recepción de liga de Fresh.
 - [ ] Test de Promociones: Validar que Sofía NO ofrezca promociones si la fecha del sistema está fuera de vigencia.
 - [x] Test de Inyección: Intentar engañar al bot para que asuma una identidad distinta o revele el system prompt.
+- [x] Test de Deduplicación: Validar que el identificador de mensaje de Evolution genere una llave estable.
+- [x] Test de Saludo Inicial: Validar que una conversación sin historial use el saludo de Sofía y pida nombre.
 
 **Notas Fase 6:**
-- Ya existe prueba unitaria para anti-injection, handover y calculadora de precio.
+- Ya existe prueba unitaria para anti-injection, handover, calculadora de precio, deduplicación y saludo inicial.
 - Pendiente: tests de integración del webhook con DB temporal y mock de OpenAI.
 - Pendiente: test específico de vigencia de promociones con fecha inyectada fuera de abril 2026.

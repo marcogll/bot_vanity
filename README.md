@@ -3,6 +3,12 @@
 Backend FastAPI para procesar webhooks de Evolution API y responder como Sofía,
 asistente virtual de Vanity Nail Salon.
 
+## Estado actual
+
+- Sofía se presenta en la primera interacción y pide el nombre del cliente antes de continuar.
+- El webhook deduplica eventos repetidos de Evolution usando el ID del mensaje para evitar respuestas dobles.
+- Evolution corre con `evoapicloud/evolution-api:v2.3.7` para soporte actualizado de `@lid` y mapeo PN/LID.
+
 ## Setup local en Arch/Omarchy
 
 No instales dependencias con `pip` global. Arch marca Python como entorno
@@ -78,7 +84,7 @@ El stack levanta:
 
 - `vanessa-app`: backend FastAPI.
 - `vanessa-db`: PostgreSQL de Sofía.
-- `evolution-api`: instancia de Evolution API v2.
+- `evolution-api`: instancia de Evolution API v2.3.7.
 - `evolution-db`: PostgreSQL de Evolution.
 - `evolution-redis`: cache de Evolution.
 
@@ -103,3 +109,13 @@ Para ver logs:
 ```bash
 docker compose logs -f vanessa-app evolution-api
 ```
+
+## Webhook de Evolution
+
+Cuando Evolution corre en el mismo `docker-compose.yml`, usa la URL interna:
+
+```text
+http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET>
+```
+
+El backend acepta tanto `/webhook` como `/webhook/messages-upsert`, y responde `duplicate` si Evolution reenvía el mismo `key.id`.
