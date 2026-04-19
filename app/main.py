@@ -118,6 +118,7 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/webhook", response_model=WebhookResponse)
+@app.post("/webhook/messages-upsert", response_model=WebhookResponse)
 @validate_webhook_api_key
 async def webhook(
     request: Request,

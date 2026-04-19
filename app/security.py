@@ -48,7 +48,7 @@ def validate_webhook_api_key(func: F) -> F:
         if payload is not None:
             candidates.append(getattr(payload, "api_key", None))
 
-        if expected not in [candidate for candidate in candidates if candidate]:
+        if not any(_matches_webhook_secret(candidate, expected) for candidate in candidates):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid webhook API key",
@@ -79,6 +79,12 @@ def _bearer_token(value: str | None) -> str | None:
     if value.startswith(prefix):
         return value[len(prefix) :]
     return value
+
+
+def _matches_webhook_secret(candidate: str | None, expected: str) -> bool:
+    if not candidate:
+        return False
+    return candidate == expected or candidate.startswith(f"{expected}/")
 
 
 PROMPT_INJECTION_MARKERS = (
