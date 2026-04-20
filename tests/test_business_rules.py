@@ -14,6 +14,7 @@ from app.main import (
     _name_only_followup_reply,
     _reply_target,
     _send_reply,
+    _service_only_followup_reply,
     _should_send_initial_greeting,
     _webhook_dedupe_key,
 )
@@ -142,6 +143,25 @@ def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> No
 
     assert reply is not None
     assert "Gracias, Alejandra" in reply
+    assert "producto para retirar" in reply
+    assert "tono liso o diseño" in reply
+
+
+def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.assistant,
+                "content": "¡Gracias, Marco! Encantada de atenderte. 💗 Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?",
+            },
+        )()
+    ]
+
+    reply = _service_only_followup_reply("Uñas", history)
+
+    assert reply is not None
     assert "producto para retirar" in reply
     assert "tono liso o diseño" in reply
 
