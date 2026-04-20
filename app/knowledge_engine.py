@@ -61,14 +61,25 @@ class KnowledgeEngine:
         current_datetime: datetime,
         memory_context: str | None = None,
     ) -> str:
+        settings = get_settings()
+        placeholders = {
+            "{booking_url}": settings.booking_url,
+            "{ios_app_store_url}": settings.ios_app_store_url,
+            "{android_play_store_url}": settings.android_play_store_url,
+            "{payment_url}": settings.payment_url,
+        }
         docs_block = "\n\n".join(
-            f"--- {filename} ---\n{content}" for filename, content in self._documents.items()
+            f"--- {filename} ---\n{self._replace_placeholders(content, placeholders)}"
+            for filename, content in self._documents.items()
         )
         memory = memory_context or "Sin contexto previo disponible."
 
         return f"""
 Fecha y hora actual del sistema: {current_datetime.isoformat()}
-Liga oficial de agendamiento Fresh: {get_settings().booking_url}
+Liga oficial de agendamiento Fresha: {get_settings().booking_url}
+Liga App Store (iOS): {get_settings().ios_app_store_url}
+Liga Play Store (Android): {get_settings().android_play_store_url}
+Liga de pago/anticipo: {get_settings().payment_url}
 
 Contexto previo del cliente:
 {memory}
@@ -84,6 +95,12 @@ Reglas operativas obligatorias:
 Base documental:
 {docs_block}
 """.strip()
+
+    def _replace_placeholders(self, text: str, placeholders: dict[str, str]) -> str:
+        result = text
+        for placeholder, value in placeholders.items():
+            result = result.replace(placeholder, value)
+        return result
 
 
 @lru_cache

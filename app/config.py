@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     janitor_interval_seconds: int = 86_400
 
     booking_url: str = "https://vanitynails.fresh.com"
+    ios_app_store_url: str = "https://apps.apple.com/app/id1297230801"
+    android_play_store_url: str = "https://play.google.com/store/apps/details?id=com.fresha.Fresha"
+    payment_url: str = "https://www.paypal.com/ncp/payment/L3AC4D47J3QDN"
     docs_path: str = "docs"
 
     model_config = SettingsConfigDict(
