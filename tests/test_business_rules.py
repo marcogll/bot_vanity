@@ -320,6 +320,7 @@ def test_image_base64_is_sent_as_visual_content() -> None:
     assert content[0]["type"] == "text"
     assert content[1]["type"] == "image_url"
     assert content[1]["image_url"]["url"] == "data:image/png;base64,iVBORw0KGgo="
+    assert content[1]["image_url"]["detail"] == "high"
 
 
 def test_media_hint_prevents_guessing_when_image_content_is_missing() -> None:

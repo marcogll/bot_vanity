@@ -344,7 +344,7 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str | list[dict[str
         return text_content
     return [
         {"type": "text", "text": text_content},
-        {"type": "image_url", "image_url": {"url": image_data_url}},
+        {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
     ]
 
 

@@ -34,7 +34,7 @@ Crea un `.env` basado en `.env.example`.
 Modelo recomendado:
 
 ```env
-LLM_MODEL=gpt-4.1-mini
+LLM_MODEL=gpt-4o
 ```
 
 Genera una clave válida para cifrado:

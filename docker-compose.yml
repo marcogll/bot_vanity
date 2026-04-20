@@ -15,7 +15,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY is required}
       AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:?AES_ENCRYPTION_KEY is required}
       WEBHOOK_SECRET: ${WEBHOOK_SECRET:?WEBHOOK_SECRET is required}
-      LLM_MODEL: ${LLM_MODEL:-gpt-4.1-mini}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
       MEMORY_RETENTION_DAYS: ${MEMORY_RETENTION_DAYS:-30}
       BOOKING_URL: ${BOOKING_URL:-https://vanitynails.fresh.com}
       IOS_APP_STORE_URL: ${IOS_APP_STORE_URL:-https://apps.apple.com/app/id1297230801}
