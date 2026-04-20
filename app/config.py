@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     evolution_connected_number: str = ""
 
     openai_api_key: str = Field(..., min_length=1)
-    llm_model: str = "gpt-4o"
+    llm_model: str = "gpt-4.1-mini"
 
     database_url: str = Field(..., min_length=1)
     aes_encryption_key: str = Field(

@@ -31,6 +31,12 @@ Si no activas el virtualenv, ejecuta los binarios directamente:
 
 Crea un `.env` basado en `.env.example`.
 
+Modelo recomendado:
+
+```env
+LLM_MODEL=gpt-4.1-mini
+```
+
 Genera una clave válida para cifrado:
 
 ```bash

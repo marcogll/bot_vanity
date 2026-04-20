@@ -316,7 +316,7 @@ async def _ask_vanessa(
             max_tokens=450,
         )
     except Exception:
-        logger.exception("OpenAI response generation failed")
+        logger.exception("OpenAI response generation failed with model=%s", settings.llm_model)
         return _technical_fallback_reply(payload, history)
 
     content = completion.choices[0].message.content
