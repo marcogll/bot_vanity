@@ -5,6 +5,7 @@ from app.main import (
     INITIAL_GREETING_REPLY,
     MEMORY_DELETE_CONFIRMATION_REPLY,
     _build_user_content,
+    _booking_proof_message,
     _clear_memory_delete_pending,
     _handle_memory_delete_confirmation,
     _is_cancellation,
@@ -13,6 +14,7 @@ from app.main import (
     _mark_memory_delete_pending,
     _media_prompt_hint,
     _format_whatsapp_reply,
+    _looks_like_appointment_confirmation_context,
     _name_and_service_followup_reply,
     _name_only_followup_reply,
     _nail_options_followup_reply,
@@ -23,7 +25,7 @@ from app.main import (
     _technical_fallback_reply,
     _webhook_dedupe_key,
 )
-from app.models import Interaccion, MessageRole, SesionMemoria
+from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
 
@@ -86,12 +88,45 @@ def test_memory_delete_confirmation_deletes_all_memory() -> None:
 
     assert "toda la memoria" in reply
     assert session.committed
-    assert len(session.statements) == 2
+    assert len(session.statements) == 4
     assert {statement.table.name for statement in session.statements} == {
+        CitaCompletada.__tablename__,
+        CitaPendiente.__tablename__,
         Interaccion.__tablename__,
         SesionMemoria.__tablename__,
     }
     assert all(not statement._where_criteria for statement in session.statements)
+
+
+def test_booking_checkpoint_detects_confirmation_context() -> None:
+    settings = type("Settings", (), {"booking_url": "https://vanityexperience.mx/booking"})()
+    memory = type("Memory", (), {"score_conversion": 0})()
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"content": "Agenda aquí: https://vanityexperience.mx/booking y mándame captura de confirmación."},
+        )()
+    ]
+
+    assert _looks_like_appointment_confirmation_context(memory, history, settings)
+
+
+def test_booking_proof_message_summarizes_media_metadata() -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="[Archivo recibido: imageMessage]",
+        messageType="imageMessage",
+        mediaMimetype="image/jpeg",
+        mediaFilename="confirmacion.jpg",
+        hasMedia=True,
+    )
+
+    proof = _booking_proof_message(payload)
+
+    assert "imageMessage" in proof
+    assert "image/jpeg" in proof
+    assert "confirmacion.jpg" in proof
 
 
 def test_whatsapp_reply_format_converts_markdown_links_and_bold() -> None:

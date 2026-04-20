@@ -15,6 +15,7 @@
 - Se agregó deduplicación en memoria por `instance + remote_jid + session_id` para evitar mensajes dobles cuando Evolution reenvía el mismo evento.
 - Se agregó saludo inicial fijo: Sofía se presenta y pide el nombre del cliente al iniciar una conversación nueva.
 - Se definió `dipiridú` como comando administrativo de borrado global de memoria e historial, con confirmación explícita antes de ejecutar.
+- Se agregaron tablas `citas_pendientes` y `citas_completadas` para separar reservas en proceso y completadas con comprobante de pago.
 - Se actualizó documentación en `README.md`, `PRD.md` y `TASKS.md`.
 
 ## Resultado Observado
@@ -28,7 +29,7 @@
 ## Pruebas Ejecutadas
 
 - `docker compose config --quiet`: OK.
-- `.venv/bin/python -m pytest -q`: OK, 30 pruebas pasaron tras el ajuste de fallback, formato WhatsApp y borrado global.
+- `.venv/bin/python -m pytest -q`: OK, 32 pruebas pasaron tras el ajuste de tracking de citas, fallback, formato WhatsApp y borrado global.
 
 ## Pendientes
 

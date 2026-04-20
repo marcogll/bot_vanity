@@ -82,3 +82,102 @@ class SesionMemoria(Base):
     @push_name.setter
     def push_name(self, value: str | None) -> None:
         self.encrypted_push_name = encrypt_value(value)
+
+
+class CitaPendiente(Base):
+    __tablename__ = "citas_pendientes"
+    __table_args__ = (Index("ix_citas_pendientes_whatsapp_id", "whatsapp_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    whatsapp_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
+    servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    encrypted_appointment_proof_message: Mapped[str | None] = mapped_column("appointment_proof_message", Text, nullable=True)
+    appointment_proof_received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+
+    def __init__(
+        self,
+        whatsapp_id: str,
+        push_name: str | None = None,
+        appointment_proof_message: str | None = None,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(whatsapp_id=whatsapp_id, **kwargs)
+        self.push_name = push_name
+        self.appointment_proof_message = appointment_proof_message
+
+    @property
+    def push_name(self) -> str | None:
+        return decrypt_value(self.encrypted_push_name)
+
+    @push_name.setter
+    def push_name(self, value: str | None) -> None:
+        self.encrypted_push_name = encrypt_value(value)
+
+    @property
+    def appointment_proof_message(self) -> str | None:
+        return decrypt_value(self.encrypted_appointment_proof_message)
+
+    @appointment_proof_message.setter
+    def appointment_proof_message(self, value: str | None) -> None:
+        self.encrypted_appointment_proof_message = encrypt_value(value)
+
+
+class CitaCompletada(Base):
+    __tablename__ = "citas_completadas"
+    __table_args__ = (Index("ix_citas_completadas_whatsapp_id", "whatsapp_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    whatsapp_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
+    servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    encrypted_appointment_proof_message: Mapped[str | None] = mapped_column("appointment_proof_message", Text, nullable=True)
+    encrypted_payment_proof_message: Mapped[str | None] = mapped_column("payment_proof_message", Text, nullable=True)
+    appointment_proof_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    payment_proof_received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+
+    def __init__(
+        self,
+        whatsapp_id: str,
+        push_name: str | None = None,
+        appointment_proof_message: str | None = None,
+        payment_proof_message: str | None = None,
+        **kwargs: object,
+    ) -> None:
+        super().__init__(whatsapp_id=whatsapp_id, **kwargs)
+        self.push_name = push_name
+        self.appointment_proof_message = appointment_proof_message
+        self.payment_proof_message = payment_proof_message
+
+    @property
+    def push_name(self) -> str | None:
+        return decrypt_value(self.encrypted_push_name)
+
+    @push_name.setter
+    def push_name(self, value: str | None) -> None:
+        self.encrypted_push_name = encrypt_value(value)
+
+    @property
+    def appointment_proof_message(self) -> str | None:
+        return decrypt_value(self.encrypted_appointment_proof_message)
+
+    @appointment_proof_message.setter
+    def appointment_proof_message(self, value: str | None) -> None:
+        self.encrypted_appointment_proof_message = encrypt_value(value)
+
+    @property
+    def payment_proof_message(self) -> str | None:
+        return decrypt_value(self.encrypted_payment_proof_message)
+
+    @payment_proof_message.setter
+    def payment_proof_message(self, value: str | None) -> None:
+        self.encrypted_payment_proof_message = encrypt_value(value)

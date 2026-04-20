@@ -170,6 +170,17 @@ base de memoria e historial:
 No borra solo la conversación del usuario que lo envió. La confirmación existe
 para evitar borrados accidentales.
 
+## Tracking De Citas
+
+Sofía mantiene dos tablas operativas para seguimiento de reservas:
+
+- `citas_pendientes`: se crea cuando la clienta envía una captura/comprobante de cita después de recibir la liga de agendamiento.
+- `citas_completadas`: se crea cuando, existiendo una pendiente, la clienta envía después el comprobante de pago/anticipo.
+
+Cuando una cita pasa a completada, se elimina de `citas_pendientes`. La tabla
+`citas_pendientes` se purga con `MEMORY_RETENTION_DAYS`; `citas_completadas`
+no se borra automáticamente por tiempo.
+
 ## Webhook de Evolution
 
 Cuando Evolution corre en el mismo `docker-compose.yml`, usa la URL interna:

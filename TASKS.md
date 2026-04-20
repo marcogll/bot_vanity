@@ -47,11 +47,13 @@ Gestión de la base de datos y la política de 30 días.
 - [x] Migraciones: Ejecutar scripts iniciales de creación de tablas según `docs/db.md`.
 - [x] Lógica de Resumen: Programar que, tras cada interacción, la IA genere/actualice el `resumen_perfil` en la tabla `sesiones_memoria`.
 - [x] Janitor Task (Cron): Desarrollar la tarea programada que se ejecuta cada 24h para purgar registros con más de 30 días de antigüedad.
+- [x] Tracking de citas: guardar citas pendientes al recibir comprobante de cita y mover a completadas al recibir comprobante de pago.
 
 **Notas Fase 4:**
 - Las tablas se crean con `SQLAlchemy metadata.create_all()` al iniciar. Pendiente futuro: migraciones formales con Alembic antes de producción.
 - El resumen de memoria actual es determinístico y compacto; pendiente futuro: resumen generado por LLM cuando se estabilice el costo/latencia.
 - El Janitor corre como background task dentro de FastAPI cada 24h y borra interacciones/sesiones fuera de retención.
+- `citas_pendientes` se purga con la retención de la app. `citas_completadas` no se purga automáticamente.
 
 ## Fase 5: Lógica de Negocio y Seguimiento ⏱️
 Funciones específicas de Vanity Nail Salon.

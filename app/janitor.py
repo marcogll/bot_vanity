@@ -6,7 +6,7 @@ from sqlalchemy import delete
 
 from app.config import get_settings
 from app.database import AsyncSessionLocal
-from app.models import Interaccion, SesionMemoria
+from app.models import CitaPendiente, Interaccion, SesionMemoria
 
 
 logger = logging.getLogger("vanessa.janitor")
@@ -18,6 +18,7 @@ async def purge_expired_records() -> None:
     async with AsyncSessionLocal() as session:
         await session.execute(delete(Interaccion).where(Interaccion.timestamp < cutoff))
         await session.execute(delete(SesionMemoria).where(SesionMemoria.updated_at < cutoff))
+        await session.execute(delete(CitaPendiente).where(CitaPendiente.updated_at < cutoff))
         await session.commit()
     logger.info("DB purge completed")
 

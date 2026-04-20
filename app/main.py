@@ -17,7 +17,7 @@ from app.database import AsyncSessionLocal, close_db, init_db
 from app.evolution import send_text_message
 from app.janitor import janitor_loop
 from app.knowledge_engine import get_knowledge_engine
-from app.models import Interaccion, MessageRole, SesionMemoria
+from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
 from app.rate_limit import InMemoryRateLimiter
 from app.security import looks_like_prompt_injection, validate_webhook_api_key
@@ -273,6 +273,7 @@ async def _handle_webhook_payload(
         return
 
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
+    await _record_booking_checkpoint(db, payload, memory, history, settings)
     await db.commit()
 
     response_text = await _ask_vanessa(settings, payload, memory, history)
@@ -878,6 +879,76 @@ async def _add_interaction_pair(
     db.add(Interaccion(whatsapp_id, MessageRole.assistant, assistant_message))
 
 
+async def _record_booking_checkpoint(
+    db: AsyncSession,
+    payload: EvolutionWebhookPayload,
+    memory: SesionMemoria,
+    history: list[Interaccion],
+    settings: Settings,
+) -> None:
+    if not payload.has_media:
+        return
+
+    pending = await _get_pending_booking(db, payload.remote_jid)
+    proof_message = _booking_proof_message(payload)
+    if pending:
+        completed = CitaCompletada(
+            whatsapp_id=payload.remote_jid,
+            push_name=payload.push_name or pending.push_name,
+            appointment_proof_message=pending.appointment_proof_message,
+            payment_proof_message=proof_message,
+            servicio_interes=pending.servicio_interes or memory.servicio_interes,
+            appointment_proof_received_at=pending.appointment_proof_received_at,
+        )
+        db.add(completed)
+        await db.delete(pending)
+        logger.info("Booking moved from pending to completed for %s", payload.remote_jid)
+        return
+
+    if not _looks_like_appointment_confirmation_context(memory, history, settings):
+        return
+
+    pending = CitaPendiente(
+        whatsapp_id=payload.remote_jid,
+        push_name=payload.push_name or memory.push_name,
+        appointment_proof_message=proof_message,
+        servicio_interes=memory.servicio_interes,
+    )
+    db.add(pending)
+    logger.info("Pending booking recorded for %s", payload.remote_jid)
+
+
+async def _get_pending_booking(db: AsyncSession, whatsapp_id: str) -> CitaPendiente | None:
+    result = await db.execute(select(CitaPendiente).where(CitaPendiente.whatsapp_id == whatsapp_id))
+    return result.scalar_one_or_none()
+
+
+def _booking_proof_message(payload: EvolutionWebhookPayload) -> str:
+    details = [payload.message_type or "archivo"]
+    if payload.media_mimetype:
+        details.append(payload.media_mimetype)
+    if payload.media_filename:
+        details.append(payload.media_filename)
+    return f"{payload.message} ({' | '.join(details)})"
+
+
+def _looks_like_appointment_confirmation_context(
+    memory: SesionMemoria,
+    history: list[Interaccion],
+    settings: Settings,
+) -> bool:
+    if memory.score_conversion:
+        return True
+    recent = " ".join(item.content for item in history[-6:]).casefold()
+    return (
+        settings.booking_url.casefold() in recent
+        or "captura" in recent
+        or "confirmación" in recent
+        or "confirmacion" in recent
+        or "anticipo" in recent
+    )
+
+
 async def _persist_interaction(
     db: AsyncSession,
     whatsapp_id: str,
@@ -947,8 +1018,10 @@ async def _handle_memory_delete_confirmation(
     if _is_confirmation(payload.message):
         await db.execute(delete(Interaccion))
         await db.execute(delete(SesionMemoria))
+        await db.execute(delete(CitaPendiente))
+        await db.execute(delete(CitaCompletada))
         await db.commit()
-        return "Listo, borré toda la memoria e historial de conversación de Sofía."
+        return "Listo, borré toda la memoria, historial y registros de citas de Sofía."
 
     if _is_cancellation(payload.message):
         reply = "Perfecto, cancelo el borrado y conservo la memoria de Sofía."
