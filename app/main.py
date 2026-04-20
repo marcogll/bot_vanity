@@ -272,6 +272,13 @@ async def _handle_webhook_payload(
         logger.info("Name-only reply handled without LLM for %s", payload.remote_jid)
         return
 
+    name_and_service_reply = _name_and_service_followup_reply(payload.message, history)
+    if name_and_service_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_and_service_reply)
+        await _send_reply(payload, name_and_service_reply)
+        logger.info("Name-and-service reply handled without LLM for %s", payload.remote_jid)
+        return
+
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
 
@@ -371,6 +378,33 @@ def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str |
     )
 
 
+def _name_and_service_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_name(history):
+        return None
+    service = _detect_service(message)
+    if not service:
+        return None
+
+    name = _extract_leading_name(message)
+    greeting = f"¡Gracias, {name.split()[0]}! " if name else "¡Perfecto! "
+    if service == "Uñas":
+        return (
+            f"{greeting}Para orientarte mejor con tu servicio de uñas, "
+            "¿traes algún producto para retirar y buscas tono liso o diseño? 💗"
+        )
+    if service == "Pestañas":
+        return (
+            f"{greeting}Para orientarte mejor con pestañas, "
+            "¿traes extensiones o producto para retirar? ☺️"
+        )
+    if service == "Cejas":
+        return (
+            f"{greeting}Para orientarte mejor con cejas, "
+            "¿buscas laminado, diseño, depilación o tinte? 💗"
+        )
+    return None
+
+
 def _last_assistant_requested_name(history: list[Interaccion]) -> bool:
     if not history:
         return False
@@ -419,6 +453,25 @@ def _extract_name_only(message: str) -> str | None:
     if not re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", cleaned):
         return None
     return cleaned
+
+
+def _extract_leading_name(message: str) -> str | None:
+    candidate = message.strip()
+    if not candidate:
+        return None
+
+    prefix_match = re.match(
+        r"^(?:soy|me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]{2,40})(?:,|\s+y\b|\s+quiero\b|\s+busco\b|\s+necesito\b|$)",
+        candidate,
+        flags=re.IGNORECASE,
+    )
+    if prefix_match:
+        return prefix_match.group(1).strip()
+
+    comma_prefix = candidate.split(",", 1)[0].strip()
+    if 1 <= len(comma_prefix.split()) <= 4 and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", comma_prefix):
+        return comma_prefix
+    return None
 
 
 def _extract_message_text(message: object, data: dict[str, object] | None = None) -> str:

@@ -10,6 +10,7 @@ from app.main import (
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
+    _name_and_service_followup_reply,
     _name_only_followup_reply,
     _reply_target,
     _send_reply,
@@ -126,6 +127,23 @@ def test_name_only_reply_after_initial_greeting_does_not_need_llm() -> None:
     assert reply is not None
     assert "Gracias, Marco" in reply
     assert "qué servicio buscas" in reply
+
+
+def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )()
+    ]
+
+    reply = _name_and_service_followup_reply("Alejandra, quiero hacerme uñas", history)
+
+    assert reply is not None
+    assert "Gracias, Alejandra" in reply
+    assert "producto para retirar" in reply
+    assert "tono liso o diseño" in reply
 
 
 def test_reply_target_prefers_sender_for_lid_webhook() -> None:
