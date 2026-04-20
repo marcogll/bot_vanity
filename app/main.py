@@ -3,6 +3,7 @@ import logging
 import re
 from collections import OrderedDict
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import Depends, FastAPI, Request
 from openai import AsyncOpenAI
@@ -51,6 +52,7 @@ class EvolutionWebhookPayload(BaseModel):
     message_type: str | None = Field(default=None, alias="messageType")
     media_mimetype: str | None = Field(default=None, alias="mediaMimetype")
     media_filename: str | None = Field(default=None, alias="mediaFilename")
+    media_base64: str | None = Field(default=None, alias="mediaBase64")
     has_media: bool = Field(default=False, alias="hasMedia")
     session_id: str | None = Field(default=None, alias="sessionId")
     from_me: bool = Field(default=False, alias="fromMe")
@@ -87,6 +89,7 @@ class EvolutionWebhookPayload(BaseModel):
             "messageType": data.get("messageType") or media["message_type"],
             "mediaMimetype": media["mimetype"],
             "mediaFilename": media["filename"],
+            "mediaBase64": media["base64"],
             "hasMedia": media["has_media"],
             "sessionId": key.get("id") or data.get("id"),
             "fromMe": bool(key.get("fromMe", False)),
@@ -295,7 +298,7 @@ async def _ask_vanessa(
         memory_context=memory_context,
     )
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
     for item in history:
         messages.append({"role": item.role.value, "content": item.content})
     messages.append(
@@ -322,19 +325,26 @@ async def _ask_vanessa(
     return content.strip()
 
 
-def _build_user_content(payload: EvolutionWebhookPayload) -> str:
+def _build_user_content(payload: EvolutionWebhookPayload) -> str | list[dict[str, Any]]:
     estimate = estimate_from_message(payload.message)
     estimate_hint = (
         f"\n\nCotización determinística detectada desde knowledge_base.md:\n{estimate.to_prompt_hint()}"
         if estimate
         else ""
     )
-    return (
+    text_content = (
         f"Nombre WhatsApp: {payload.push_name or 'No disponible'}\n"
         f"Mensaje: {payload.message}"
         f"{_media_prompt_hint(payload)}"
         f"{estimate_hint}"
     )
+    image_data_url = _image_media_data_url(payload)
+    if not image_data_url:
+        return text_content
+    return [
+        {"type": "text", "text": text_content},
+        {"type": "image_url", "image_url": {"url": image_data_url}},
+    ]
 
 
 def _should_send_initial_greeting(history: list[Interaccion], memory: SesionMemoria) -> bool:
@@ -384,25 +394,30 @@ def _extract_media_metadata(message: object, data: dict[str, object] | None = No
                 "message_type": message_type or key,
                 "mimetype": media.get("mimetype") if isinstance(media.get("mimetype"), str) else None,
                 "filename": media.get("fileName") if isinstance(media.get("fileName"), str) else None,
+                "base64": _extract_base64(media) or _extract_base64(message) or _extract_base64(data),
             }
 
-        if "base64" in message:
+        base64_content = _extract_base64(message)
+        if base64_content:
             return {
                 "has_media": True,
                 "message_type": message_type or "base64",
                 "mimetype": None,
                 "filename": None,
+                "base64": base64_content,
             }
 
-    if "base64" in data:
+    base64_content = _extract_base64(data)
+    if base64_content:
         return {
             "has_media": True,
             "message_type": message_type or "base64",
             "mimetype": None,
             "filename": None,
+            "base64": base64_content,
         }
 
-    return {"has_media": False, "message_type": message_type, "mimetype": None, "filename": None}
+    return {"has_media": False, "message_type": message_type, "mimetype": None, "filename": None, "base64": None}
 
 
 def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
@@ -413,7 +428,33 @@ def _media_prompt_hint(payload: EvolutionWebhookPayload) -> str:
         details.append(payload.media_mimetype)
     if payload.media_filename:
         details.append(payload.media_filename)
-    return f"\nArchivo adjunto detectado: {' | '.join(details)}"
+    readability = (
+        "El contenido visual se adjunta para lectura."
+        if _image_media_data_url(payload)
+        else "No hay contenido visual legible en el webhook; no inventes datos de la captura."
+    )
+    return f"\nArchivo adjunto detectado: {' | '.join(details)}. {readability}"
+
+
+def _extract_base64(value: object) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    for key in ("base64", "mediaBase64"):
+        content = value.get(key)
+        if isinstance(content, str) and content.strip():
+            return content.strip()
+    return None
+
+
+def _image_media_data_url(payload: EvolutionWebhookPayload) -> str | None:
+    if not payload.media_base64:
+        return None
+    mimetype = payload.media_mimetype or ""
+    if not (mimetype.startswith("image/") or payload.message_type == "imageMessage"):
+        return None
+    if payload.media_base64.startswith("data:image/"):
+        return payload.media_base64
+    return f"data:{mimetype or 'image/jpeg'};base64,{payload.media_base64}"
 
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:

@@ -3,6 +3,7 @@ from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
+    _build_user_content,
     _clear_memory_delete_pending,
     _is_cancellation,
     _is_confirmation,
@@ -270,6 +271,51 @@ def test_base64_media_without_caption_becomes_safe_text() -> None:
     assert payload.message == "[Archivo recibido: documentMessage]"
     assert payload.has_media
     assert payload.media_filename == "referencia.pdf"
+    assert payload.media_base64 == "JVBERi0x"
+
+
+def test_image_base64_is_sent_as_visual_content() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "5218446686100@s.whatsapp.net", "fromMe": False},
+                "messageType": "imageMessage",
+                "message": {
+                    "imageMessage": {
+                        "mimetype": "image/png",
+                        "base64": "iVBORw0KGgo=",
+                    }
+                },
+            },
+        }
+    )
+
+    content = _build_user_content(payload)
+
+    assert isinstance(content, list)
+    assert content[0]["type"] == "text"
+    assert content[1]["type"] == "image_url"
+    assert content[1]["image_url"]["url"] == "data:image/png;base64,iVBORw0KGgo="
+
+
+def test_media_hint_prevents_guessing_when_image_content_is_missing() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "5218446686100@s.whatsapp.net", "fromMe": False},
+                "messageType": "imageMessage",
+                "message": {
+                    "imageMessage": {
+                        "mimetype": "image/jpeg",
+                    }
+                },
+            },
+        }
+    )
+
+    assert "no inventes datos" in _media_prompt_hint(payload)
 
 
 async def _failing_send_text_message(*args: object, **kwargs: object) -> None:
