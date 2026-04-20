@@ -10,8 +10,11 @@ from app.main import (
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
+    _name_and_service_followup_reply,
+    _name_only_followup_reply,
     _reply_target,
     _send_reply,
+    _service_only_followup_reply,
     _should_send_initial_greeting,
     _technical_fallback_reply,
     _webhook_dedupe_key,
@@ -111,6 +114,59 @@ def test_initial_greeting_is_used_only_without_history_or_memory() -> None:
     assert not _should_send_initial_greeting([], existing_memory)
     assert "Soy Sofía" in INITIAL_GREETING_REPLY
     assert "nombre" in INITIAL_GREETING_REPLY
+    assert "servicio" not in INITIAL_GREETING_REPLY
+
+
+def test_name_only_reply_after_initial_greeting_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )()
+    ]
+
+    reply = _name_only_followup_reply("Marco", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
+    assert "qué servicio buscas" in reply
+
+
+def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )()
+    ]
+
+    reply = _name_and_service_followup_reply("Alejandra, quiero hacerme uñas", history)
+
+    assert reply is not None
+    assert "Gracias, Alejandra" in reply
+    assert "producto para retirar" in reply
+    assert "tono liso o diseño" in reply
+
+
+def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.assistant,
+                "content": "¡Gracias, Marco! Encantada de atenderte. 💗 Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?",
+            },
+        )()
+    ]
+
+    reply = _service_only_followup_reply("Uñas", history)
+
+    assert reply is not None
+    assert "producto para retirar" in reply
+    assert "tono liso o diseño" in reply
 
 
 def test_technical_fallback_does_not_offer_human_handover() -> None:

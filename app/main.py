@@ -34,7 +34,7 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
 )
 INITIAL_GREETING_REPLY = (
     "¡Hola! Soy Sofía, la asistente de Vanity Nail Salon. "
-    "¿Me compartes tu nombre para atenderte mejor? También cuéntame qué servicio buscas: uñas, pestañas o cejas."
+    "¿Me compartes tu nombre para atenderte mejor?"
 )
 MAX_PROCESSED_WEBHOOK_IDS = 1000
 
@@ -265,6 +265,27 @@ async def _handle_webhook_payload(
         logger.info("Initial greeting sent to %s", payload.remote_jid)
         return
 
+    name_only_reply = _name_only_followup_reply(payload.message, history)
+    if name_only_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply)
+        await _send_reply(payload, name_only_reply)
+        logger.info("Name-only reply handled without LLM for %s", payload.remote_jid)
+        return
+
+    name_and_service_reply = _name_and_service_followup_reply(payload.message, history)
+    if name_and_service_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_and_service_reply)
+        await _send_reply(payload, name_and_service_reply)
+        logger.info("Name-and-service reply handled without LLM for %s", payload.remote_jid)
+        return
+
+    service_only_reply = _service_only_followup_reply(payload.message, history)
+    if service_only_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, service_only_reply)
+        await _send_reply(payload, service_only_reply)
+        logger.info("Service-only reply handled without LLM for %s", payload.remote_jid)
+        return
+
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
 
@@ -365,8 +386,142 @@ def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[In
         )
     return (
         "Perdón, tuve un detalle técnico al procesar tu mensaje. "
-        "¿Me compartes tu nombre y qué servicio buscas: uñas, pestañas o cejas? 💗"
+        "¿Me compartes tu nombre para atenderte mejor? 💗"
     )
+
+
+def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_name(history):
+        return None
+    name = _extract_name_only(message)
+    if not name:
+        return None
+    first_name = name.split()[0]
+    return (
+        f"¡Gracias, {first_name}! Encantada de atenderte. 💗 "
+        "Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?"
+    )
+
+
+def _name_and_service_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_name(history):
+        return None
+    service = _detect_service(message)
+    if not service:
+        return None
+
+    name = _extract_leading_name(message)
+    greeting = f"¡Gracias, {name.split()[0]}! " if name else "¡Perfecto! "
+    return _service_details_reply(service, greeting)
+
+
+def _service_only_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_service(history):
+        return None
+    service = _detect_service(message)
+    if not service:
+        return None
+    return _service_details_reply(service, "¡Perfecto! ")
+
+
+def _service_details_reply(service: str, greeting: str) -> str | None:
+    if service == "Uñas":
+        return (
+            f"{greeting}Para orientarte mejor con tu servicio de uñas, "
+            "¿traes algún producto para retirar y buscas tono liso o diseño? 💗"
+        )
+    if service == "Pestañas":
+        return (
+            f"{greeting}Para orientarte mejor con pestañas, "
+            "¿traes extensiones o producto para retirar? ☺️"
+        )
+    if service == "Cejas":
+        return (
+            f"{greeting}Para orientarte mejor con cejas, "
+            "¿buscas laminado, diseño, depilación o tinte? 💗"
+        )
+    return None
+
+
+def _last_assistant_requested_service(history: list[Interaccion]) -> bool:
+    if not history:
+        return False
+    last = history[-1]
+    if last.role != MessageRole.assistant:
+        return False
+    normalized = last.content.casefold()
+    return "qué servicio buscas" in normalized and all(
+        service in normalized for service in ("uñas", "pestañas", "cejas")
+    )
+
+
+def _last_assistant_requested_name(history: list[Interaccion]) -> bool:
+    if not history:
+        return False
+    last = history[-1]
+    if last.role != MessageRole.assistant:
+        return False
+    normalized = last.content.casefold()
+    return "nombre" in normalized
+
+
+def _extract_name_only(message: str) -> str | None:
+    normalized = message.strip()
+    if not normalized:
+        return None
+    lowered = normalized.casefold()
+    blocked_terms = (
+        "hola",
+        "buen",
+        "quiero",
+        "busco",
+        "necesito",
+        "cita",
+        "agenda",
+        "precio",
+        "servicio",
+        "uña",
+        "unas",
+        "manicure",
+        "pedicure",
+        "pedi",
+        "gelish",
+        "acrilic",
+        "acrílic",
+        "pestaña",
+        "lash",
+        "ceja",
+        "brow",
+    )
+    if any(term in lowered for term in blocked_terms):
+        return None
+
+    cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
+    words = cleaned.split()
+    if not 1 <= len(words) <= 4:
+        return None
+    if not re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", cleaned):
+        return None
+    return cleaned
+
+
+def _extract_leading_name(message: str) -> str | None:
+    candidate = message.strip()
+    if not candidate:
+        return None
+
+    prefix_match = re.match(
+        r"^(?:soy|me llamo|mi nombre es)\s+([A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]{2,40})(?:,|\s+y\b|\s+quiero\b|\s+busco\b|\s+necesito\b|$)",
+        candidate,
+        flags=re.IGNORECASE,
+    )
+    if prefix_match:
+        return prefix_match.group(1).strip()
+
+    comma_prefix = candidate.split(",", 1)[0].strip()
+    if 1 <= len(comma_prefix.split()) <= 4 and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", comma_prefix):
+        return comma_prefix
+    return None
 
 
 def _extract_message_text(message: object, data: dict[str, object] | None = None) -> str:
