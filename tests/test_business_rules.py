@@ -3,13 +3,16 @@ from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
+    MEMORY_DELETE_CONFIRMATION_REPLY,
     _build_user_content,
     _clear_memory_delete_pending,
+    _handle_memory_delete_confirmation,
     _is_cancellation,
     _is_confirmation,
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
+    _format_whatsapp_reply,
     _name_and_service_followup_reply,
     _name_only_followup_reply,
     _nail_options_followup_reply,
@@ -20,7 +23,7 @@ from app.main import (
     _technical_fallback_reply,
     _webhook_dedupe_key,
 )
-from app.models import MessageRole
+from app.models import Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
 
@@ -50,6 +53,8 @@ def test_pricing_estimate_adds_base_retiro_and_nail_art() -> None:
 def test_memory_delete_trigger_is_exact_command() -> None:
     assert _is_memory_delete_trigger(" dipiridú ")
     assert not _is_memory_delete_trigger("quiero dipiridú")
+    assert "TODA la base" in MEMORY_DELETE_CONFIRMATION_REPLY
+    assert "todos los usuarios" in MEMORY_DELETE_CONFIRMATION_REPLY
 
 
 def test_memory_delete_confirmation_words() -> None:
@@ -57,6 +62,52 @@ def test_memory_delete_confirmation_words() -> None:
     assert _is_confirmation("SI")
     assert _is_cancellation("no")
     assert _is_cancellation("cancelar")
+
+
+def test_memory_delete_confirmation_deletes_all_memory() -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.statements = []
+            self.committed = False
+
+        async def execute(self, statement: object) -> None:
+            self.statements.append(statement)
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="sí")
+    memory = type("Memory", (), {"push_name": None, "resumen_perfil": "__memory_delete_pending__"})()
+    session = FakeSession()
+
+    import asyncio
+
+    reply = asyncio.run(_handle_memory_delete_confirmation(session, memory, payload))
+
+    assert "toda la memoria" in reply
+    assert session.committed
+    assert len(session.statements) == 2
+    assert {statement.table.name for statement in session.statements} == {
+        Interaccion.__tablename__,
+        SesionMemoria.__tablename__,
+    }
+    assert all(not statement._where_criteria for statement in session.statements)
+
+
+def test_whatsapp_reply_format_converts_markdown_links_and_bold() -> None:
+    reply = (
+        "Agenda aquí: [https://vanityexperience.mx/booking](https://vanityexperience.mx/booking)\n"
+        "También tenemos **Acrílicas** y [anticipo](https://pay.example/test)."
+    )
+
+    formatted = _format_whatsapp_reply(reply)
+
+    assert "[https://vanityexperience.mx/booking]" not in formatted
+    assert "(https://vanityexperience.mx/booking)" not in formatted
+    assert "https://vanityexperience.mx/booking" in formatted
+    assert "*Acrílicas*" in formatted
+    assert "**" not in formatted
+    assert "anticipo: https://pay.example/test" in formatted
 
 
 def test_memory_delete_pending_marker_preserves_summary() -> None:

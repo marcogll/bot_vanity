@@ -37,6 +37,10 @@ Modelo recomendado:
 LLM_MODEL=gpt-4o
 ```
 
+`OPENAI_API_KEY` debe ser la llave completa de OpenAI. Si queda truncada, por ejemplo
+`sk-proj-`, Sofía no podrá usar la knowledge base ni promociones y caerá al fallback
+técnico.
+
 Genera una clave válida para cifrado:
 
 ```bash
@@ -115,6 +119,56 @@ Para ver logs:
 ```bash
 docker compose logs -f vanessa-app evolution-api
 ```
+
+En Coolify los contenedores tienen nombres generados. Para ubicar la app:
+
+```bash
+APP=$(docker ps --filter "ancestor=marcogll/vanessa-bot-vanity:latest" --format "{{.Names}}" | head -n1)
+echo "$APP"
+docker logs -f "$APP"
+```
+
+## Verificación OpenAI En Producción
+
+Después de crear o actualizar variables en Coolify, valida que el contenedor tenga
+la llave completa y pueda llamar a OpenAI:
+
+```bash
+APP=$(docker ps --filter "ancestor=marcogll/vanessa-bot-vanity:latest" --format "{{.Names}}" | head -n1)
+
+docker exec "$APP" python -c 'from app.config import get_settings; from openai import OpenAI; s=get_settings(); print("model:", s.llm_model); print("key_prefix:", s.openai_api_key[:7]); print("key_len:", len(s.openai_api_key)); r=OpenAI(api_key=s.openai_api_key).chat.completions.create(model=s.llm_model, messages=[{"role":"user","content":"Responde solo OK"}], max_tokens=5); print("reply:", r.choices[0].message.content)'
+```
+
+Resultado esperado:
+
+```text
+model: gpt-4o
+key_prefix: sk-proj
+key_len: <mucho mayor que 8>
+reply: OK
+```
+
+Si `key_len` es `8` y el error dice `Incorrect API key provided: sk-proj-`,
+la variable `OPENAI_API_KEY` está incompleta en Coolify. Corrige la variable,
+redeploya y repite la prueba.
+
+Para confirmar que la imagen tiene el código reciente:
+
+```bash
+docker exec "$APP" python -c 'import inspect, app.main as m; print("has_local_recovery:", hasattr(m, "_local_recovery_reply")); print("image_high:", "\"detail\": \"high\"" in inspect.getsource(m._build_user_content)); print("greeting:", m.INITIAL_GREETING_REPLY)'
+```
+
+## Comando De Borrado Global
+
+`dipiridú` es un comando administrativo raro a propósito. Cuando Sofía recibe
+exactamente esa palabra, pide confirmación. Si se responde `sí`, borra toda la
+base de memoria e historial:
+
+- todas las filas de `interacciones`;
+- todas las filas de `sesiones_memoria`.
+
+No borra solo la conversación del usuario que lo envió. La confirmación existe
+para evitar borrados accidentales.
 
 ## Webhook de Evolution
 

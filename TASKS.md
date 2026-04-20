@@ -34,10 +34,12 @@ Protección del sistema y de los datos del cliente.
 - [x] Filtro Anti-Injection: Implementar capa de detección de frases que intenten ignorar instrucciones del sistema.
 - [x] Cifrado AES-256: Configurar el módulo `cryptography.fernet` para cifrar los campos `content` y `pushName` antes de guardarlos.
 - [x] Rate Limiting: Limitar el número de mensajes por usuario para evitar abusos o ataques de denegación de servicio.
+- [x] Comando administrativo `dipiridú`: borrar globalmente memoria e historial tras confirmación explícita.
 
 **Notas Fase 3:**
 - El rate limit actual es en memoria por proceso. Para múltiples réplicas debe moverse a Redis.
 - El filtro anti-injection cubre frases explícitas; debe ampliarse con telemetría real después de pruebas con usuarios.
+- `dipiridú` no borra solo al usuario que lo escribe; tras confirmar con `sí`, elimina todas las filas de `interacciones` y `sesiones_memoria`.
 
 ## Fase 4: Persistencia y Memoria 💾
 Gestión de la base de datos y la política de 30 días.

@@ -14,6 +14,7 @@
 - Se agregó diagnóstico de payload para casos donde Evolution entrega solo `@lid`.
 - Se agregó deduplicación en memoria por `instance + remote_jid + session_id` para evitar mensajes dobles cuando Evolution reenvía el mismo evento.
 - Se agregó saludo inicial fijo: Sofía se presenta y pide el nombre del cliente al iniciar una conversación nueva.
+- Se definió `dipiridú` como comando administrativo de borrado global de memoria e historial, con confirmación explícita antes de ejecutar.
 - Se actualizó documentación en `README.md`, `PRD.md` y `TASKS.md`.
 
 ## Resultado Observado
@@ -22,11 +23,12 @@
 - Con `latest` de `atendai/evolution-api`, Docker levantó `v2.2.3`, todavía sin los fixes necesarios.
 - Con `evoapicloud/evolution-api:v2.3.7`, Evolution logró enviar a `5218441026472` y el log mostró `Evolution sendText succeeded`.
 - Después del upgrade aparecieron múltiples POST del mismo evento, por lo que se agregó deduplicación en la app.
+- En producción se detectó una `OPENAI_API_KEY` truncada (`sk-proj-`, longitud 8); al corregirla, la prueba desde el contenedor respondió `OK` con `gpt-4o`.
 
 ## Pruebas Ejecutadas
 
 - `docker compose config --quiet`: OK.
-- `PYTHONPATH=. .venv/bin/pytest -q`: OK, 20 pruebas pasaron tras el ajuste de deduplicación y saludo inicial.
+- `.venv/bin/python -m pytest -q`: OK, 30 pruebas pasaron tras el ajuste de fallback, formato WhatsApp y borrado global.
 
 ## Pendientes
 

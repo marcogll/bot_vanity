@@ -29,8 +29,8 @@ rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_TRIGGER = "dipiridú"
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
 MEMORY_DELETE_CONFIRMATION_REPLY = (
-    "¿Confirmas que deseas borrar tu memoria de conversación con Sofía? "
-    "Responde sí para borrarla o no para conservarla."
+    "¿Confirmas que deseas borrar TODA la base de memoria e historial de Sofía? "
+    "Esto elimina las conversaciones de todos los usuarios. Responde sí para borrar todo o no para cancelar."
 )
 INITIAL_GREETING_REPLY = (
     "¡Hola! Soy Sofía, la asistente de Vanity Nail Salon. "
@@ -671,6 +671,7 @@ def _image_media_data_url(payload: EvolutionWebhookPayload) -> str | None:
 
 
 async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
+    reply = _format_whatsapp_reply(reply)
     target = _reply_target(payload)
     logger.warning("Sending WhatsApp reply: remote_jid=%s target=%s", payload.remote_jid, target)
     if "@lid" in target:
@@ -686,6 +687,20 @@ async def _send_reply(payload: EvolutionWebhookPayload, reply: str) -> None:
         await send_text_message(target, reply, instance_name=payload.instance_name)
     except Exception:
         logger.exception("Failed to send WhatsApp reply to %s", payload.remote_jid)
+
+
+def _format_whatsapp_reply(reply: str) -> str:
+    formatted = re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", _markdown_link_to_plain_text, reply)
+    formatted = re.sub(r"\*\*([^*\n][^*]*?)\*\*", r"*\1*", formatted)
+    return formatted
+
+
+def _markdown_link_to_plain_text(match: re.Match[str]) -> str:
+    label = match.group(1).strip()
+    url = match.group(2).strip()
+    if label == url or label.casefold() in {"link", "liga", "aquí", "aqui", "url"}:
+        return url
+    return f"{label}: {url}"
 
 
 def _reply_target(payload: EvolutionWebhookPayload) -> str:
@@ -930,13 +945,13 @@ async def _handle_memory_delete_confirmation(
     payload: EvolutionWebhookPayload,
 ) -> str:
     if _is_confirmation(payload.message):
-        await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == payload.remote_jid))
-        await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == payload.remote_jid))
+        await db.execute(delete(Interaccion))
+        await db.execute(delete(SesionMemoria))
         await db.commit()
-        return "Listo, borré tu memoria de conversación con Sofía."
+        return "Listo, borré toda la memoria e historial de conversación de Sofía."
 
     if _is_cancellation(payload.message):
-        reply = "Perfecto, conservo tu memoria de conversación."
+        reply = "Perfecto, cancelo el borrado y conservo la memoria de Sofía."
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _clear_memory_delete_pending(memory.resumen_perfil)
         await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
