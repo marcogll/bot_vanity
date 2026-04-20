@@ -205,7 +205,7 @@ def test_technical_fallback_does_not_offer_human_handover() -> None:
             },
         )()
     ]
-    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="Uñas")
+    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="ok")
 
     reply = _technical_fallback_reply(payload, history)
 
