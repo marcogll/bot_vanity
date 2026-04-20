@@ -16,6 +16,7 @@ Políticas:
 - Las citas pendientes se purgan con la misma retención de la app.
 - Las citas completadas no se purgan automáticamente por tiempo; quedan como registro permanente.
 - El comando administrativo `dipiridú`, tras confirmación explícita, borra memoria, historial, pendientes y completadas de forma global.
+- `dipiridú` solo puede ejecutarse desde el número configurado en `ADMIN_PHONE_NUMBER`.
 - Si Sofía no puede leer memoria cifrada por cambio de llave, debe descartarla y continuar sin contexto previo.
 
 Tablas:

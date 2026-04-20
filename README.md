@@ -35,6 +35,7 @@ Modelo recomendado:
 
 ```env
 LLM_MODEL=gpt-4o
+AUDIO_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
 ```
 
 `OPENAI_API_KEY` debe ser la llave completa de OpenAI. Si queda truncada, por ejemplo
@@ -169,6 +170,28 @@ base de memoria e historial:
 
 No borra solo la conversación del usuario que lo envió. La confirmación existe
 para evitar borrados accidentales.
+
+Solo el número configurado en `ADMIN_PHONE_NUMBER` puede iniciar o confirmar este
+comando. Usa el número en formato dígitos, sin `+`, espacios ni guiones.
+
+```env
+ADMIN_PHONE_NUMBER=5218440000000
+```
+
+## Audios De WhatsApp
+
+Si Evolution envía audio con `base64`, Sofía lo transcribe antes de procesarlo.
+La transcripción se convierte en el mensaje del usuario y sigue el mismo flujo de
+knowledge base, promociones, precios y agendamiento.
+
+Modelo por defecto:
+
+```env
+AUDIO_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
+```
+
+Evolution debe mantener habilitado `WEBHOOK_GLOBAL_WEBHOOK_BASE64=true` para que
+los audios lleguen con contenido transcribible.
 
 ## Tracking De Citas
 

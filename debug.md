@@ -16,6 +16,8 @@
 - Se agregó saludo inicial fijo: Sofía se presenta y pide el nombre del cliente al iniciar una conversación nueva.
 - Se definió `dipiridú` como comando administrativo de borrado global de memoria e historial, con confirmación explícita antes de ejecutar.
 - Se agregaron tablas `citas_pendientes` y `citas_completadas` para separar reservas en proceso y completadas con comprobante de pago.
+- Se restringió `dipiridú` al teléfono configurado en `ADMIN_PHONE_NUMBER`.
+- Se agregó transcripción de audios con `gpt-4o-mini-transcribe` cuando Evolution manda media en base64.
 - Se actualizó documentación en `README.md`, `PRD.md` y `TASKS.md`.
 
 ## Resultado Observado
@@ -29,7 +31,7 @@
 ## Pruebas Ejecutadas
 
 - `docker compose config --quiet`: OK.
-- `.venv/bin/python -m pytest -q`: OK, 32 pruebas pasaron tras el ajuste de tracking de citas, fallback, formato WhatsApp y borrado global.
+- `.venv/bin/python -m pytest -q`: OK, 34 pruebas pasaron tras el ajuste de audio, admin phone, tracking de citas, fallback, formato WhatsApp y borrado global.
 
 ## Pendientes
 

@@ -35,6 +35,7 @@ Protección del sistema y de los datos del cliente.
 - [x] Cifrado AES-256: Configurar el módulo `cryptography.fernet` para cifrar los campos `content` y `pushName` antes de guardarlos.
 - [x] Rate Limiting: Limitar el número de mensajes por usuario para evitar abusos o ataques de denegación de servicio.
 - [x] Comando administrativo `dipiridú`: borrar globalmente memoria e historial tras confirmación explícita.
+- [x] Restringir comandos administrativos al teléfono configurado en `ADMIN_PHONE_NUMBER`.
 
 **Notas Fase 3:**
 - El rate limit actual es en memoria por proceso. Para múltiples réplicas debe moverse a Redis.
@@ -62,12 +63,14 @@ Funciones específicas de Vanity Nail Salon.
 - [x] Saludo Inicial: Presentarse como Sofía y pedir el nombre del cliente en la primera interacción.
 - [x] Background Task (Follow-up): Configurar el temporizador de 10 minutos para enviar el mensaje de seguimiento si no hay confirmación de cita.
 - [x] Human Handover: Lógica para detectar palabras clave de frustración y pausar el bot.
+- [x] Transcripción de audios: convertir audios de WhatsApp con base64 a texto antes de pasarlos al flujo de OpenAI.
 
 **Notas Fase 5:**
 - La calculadora cubre los servicios principales de `knowledge_base.md` y suma base + retiro + Nail Art cuando puede detectarlos en texto.
 - El primer mensaje de una conversación nueva no llama al LLM; guarda el mensaje y responde con el saludo fijo para pedir nombre.
 - El follow-up se dispara si Sofía envió la liga y no hay una respuesta nueva del usuario después del delay configurado.
 - Pendiente futuro: guardar un estado formal de cita confirmada si Fresh o Evolution proveen esa señal.
+- Los audios requieren que Evolution mande `base64`; el modelo por defecto de transcripción es `gpt-4o-mini-transcribe`.
 
 ## Fase 6: QA y Pruebas de Estrés 🧪
 

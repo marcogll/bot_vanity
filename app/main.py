@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import io
 import logging
 import re
 from collections import OrderedDict
@@ -223,6 +225,13 @@ async def _handle_webhook_payload(
     pending_delete = _memory_delete_is_pending(memory)
 
     if _is_memory_delete_trigger(payload.message):
+        if not _is_authorized_admin(payload, settings):
+            reply = "No puedo ejecutar ese comando administrativo desde este número."
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+            await db.commit()
+            await _send_reply(payload, reply)
+            logger.warning("Unauthorized memory delete trigger from %s", payload.remote_jid)
+            return
         reply = MEMORY_DELETE_CONFIRMATION_REPLY
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _mark_memory_delete_pending(memory.resumen_perfil)
@@ -233,6 +242,13 @@ async def _handle_webhook_payload(
         return
 
     if pending_delete:
+        if not _is_authorized_admin(payload, settings):
+            reply = "No puedo confirmar ese comando administrativo desde este número."
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+            await db.commit()
+            await _send_reply(payload, reply)
+            logger.warning("Unauthorized memory delete confirmation from %s", payload.remote_jid)
+            return
         response_text = await _handle_memory_delete_confirmation(db, memory, payload)
         await _send_reply(payload, response_text)
         logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
@@ -257,6 +273,8 @@ async def _handle_webhook_payload(
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
         await _send_reply(payload, safe_reply)
         return
+
+    payload = await _with_transcribed_audio(payload, settings)
 
     history = await _get_recent_history(db, payload.remote_jid)
     if _should_send_initial_greeting(history, memory):
@@ -358,6 +376,69 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str | list[dict[str
 
 def _should_send_initial_greeting(history: list[Interaccion], memory: SesionMemoria) -> bool:
     return not history and not memory.resumen_perfil
+
+
+async def _with_transcribed_audio(
+    payload: EvolutionWebhookPayload,
+    settings: Settings,
+) -> EvolutionWebhookPayload:
+    if not _is_audio_payload(payload) or not payload.media_base64:
+        return payload
+    try:
+        transcript = await _transcribe_audio_payload(payload, settings)
+    except Exception:
+        logger.exception("OpenAI audio transcription failed with model=%s", settings.audio_transcription_model)
+        return payload
+    if not transcript:
+        return payload
+
+    logger.info("Audio transcribed for %s", payload.remote_jid)
+    return payload.model_copy(
+        update={
+            "message": f"[Audio transcrito]\n{transcript}",
+        }
+    )
+
+
+def _is_audio_payload(payload: EvolutionWebhookPayload) -> bool:
+    mimetype = payload.media_mimetype or ""
+    message_type = payload.message_type or ""
+    return message_type == "audioMessage" or mimetype.startswith("audio/")
+
+
+async def _transcribe_audio_payload(payload: EvolutionWebhookPayload, settings: Settings) -> str:
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    audio_bytes = base64.b64decode(_strip_data_url_prefix(payload.media_base64 or ""))
+    filename = payload.media_filename or _audio_filename_from_mimetype(payload.media_mimetype)
+    audio_file = io.BytesIO(audio_bytes)
+    audio_file.name = filename
+    transcription = await client.audio.transcriptions.create(
+        model=settings.audio_transcription_model,
+        file=audio_file,
+        language="es",
+    )
+    return (transcription.text or "").strip()
+
+
+def _strip_data_url_prefix(value: str) -> str:
+    if "," in value and value.startswith("data:"):
+        return value.split(",", 1)[1]
+    return value
+
+
+def _audio_filename_from_mimetype(mimetype: str | None) -> str:
+    extension_by_mimetype = {
+        "audio/ogg": "ogg",
+        "audio/opus": "ogg",
+        "audio/mpeg": "mp3",
+        "audio/mp4": "mp4",
+        "audio/webm": "webm",
+        "audio/wav": "wav",
+        "audio/x-wav": "wav",
+        "audio/m4a": "m4a",
+    }
+    extension = extension_by_mimetype.get(mimetype or "", "ogg")
+    return f"whatsapp-audio.{extension}"
 
 
 def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[Interaccion]) -> str:
@@ -963,6 +1044,18 @@ async def _persist_interaction(
 
 def _is_memory_delete_trigger(message: str) -> bool:
     return message.strip().casefold() == MEMORY_DELETE_TRIGGER
+
+
+def _is_authorized_admin(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
+    admin_digits = _digits_only(settings.admin_phone_number)
+    if not admin_digits:
+        return False
+    candidates = [
+        payload.remote_jid,
+        payload.sender or "",
+        *payload.reply_candidates,
+    ]
+    return any(_digits_only(candidate) == admin_digits for candidate in candidates)
 
 
 def _is_sender_debug_command(message: str) -> bool:

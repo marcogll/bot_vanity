@@ -8,12 +8,16 @@ from app.main import (
     _booking_proof_message,
     _clear_memory_delete_pending,
     _handle_memory_delete_confirmation,
+    _audio_filename_from_mimetype,
+    _is_audio_payload,
+    _is_authorized_admin,
     _is_cancellation,
     _is_confirmation,
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
     _format_whatsapp_reply,
+    _strip_data_url_prefix,
     _looks_like_appointment_confirmation_context,
     _name_and_service_followup_reply,
     _name_only_followup_reply,
@@ -57,6 +61,15 @@ def test_memory_delete_trigger_is_exact_command() -> None:
     assert not _is_memory_delete_trigger("quiero dipiridú")
     assert "TODA la base" in MEMORY_DELETE_CONFIRMATION_REPLY
     assert "todos los usuarios" in MEMORY_DELETE_CONFIRMATION_REPLY
+
+
+def test_memory_delete_admin_authorization_uses_configured_phone() -> None:
+    settings = type("Settings", (), {"admin_phone_number": "5218446686100"})()
+    authorized = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="dipiridú")
+    unauthorized = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="dipiridú")
+
+    assert _is_authorized_admin(authorized, settings)
+    assert not _is_authorized_admin(unauthorized, settings)
 
 
 def test_memory_delete_confirmation_words() -> None:
@@ -127,6 +140,21 @@ def test_booking_proof_message_summarizes_media_metadata() -> None:
     assert "imageMessage" in proof
     assert "image/jpeg" in proof
     assert "confirmacion.jpg" in proof
+
+
+def test_audio_payload_helpers_detect_audio_and_filename() -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="[Archivo recibido: audioMessage]",
+        messageType="audioMessage",
+        mediaMimetype="audio/ogg",
+        mediaBase64="data:audio/ogg;base64,T0dnUw==",
+        hasMedia=True,
+    )
+
+    assert _is_audio_payload(payload)
+    assert _strip_data_url_prefix(payload.media_base64 or "") == "T0dnUw=="
+    assert _audio_filename_from_mimetype("audio/ogg") == "whatsapp-audio.ogg"
 
 
 def test_whatsapp_reply_format_converts_markdown_links_and_bold() -> None:

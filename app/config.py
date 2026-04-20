@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = Field(..., min_length=1)
     llm_model: str = "gpt-4o"
+    audio_transcription_model: str = "gpt-4o-mini-transcribe"
 
     database_url: str = Field(..., min_length=1)
     aes_encryption_key: str = Field(
@@ -25,6 +26,7 @@ class Settings(BaseSettings):
     )
     memory_retention_days: int = 30
     webhook_secret: str = Field(..., min_length=1)
+    admin_phone_number: str = ""
     rate_limit_max_requests: int = 20
     rate_limit_window_seconds: int = 60
     follow_up_delay_seconds: int = 600
