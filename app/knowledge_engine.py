@@ -90,7 +90,7 @@ Reglas operativas obligatorias:
 - Usa solo precios, duraciones y promociones presentes en los documentos.
 - Valida promociones temporales contra la fecha actual antes de ofrecerlas.
 - Si falta información para cotizar, pregunta una cosa concreta antes de avanzar.
-- Si detectas frustración o solicitud humana, indica que una persona del equipo tomará la conversación.
+- Solo ofrece intervención humana si el cliente la solicita explícitamente, presenta una queja/frustración fuerte, o el caso no puede resolverse con la información documental. No uses intervención humana para dudas normales de servicios, precios, citas, capturas o agendamiento.
 
 Base documental:
 {docs_block}

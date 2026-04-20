@@ -10,12 +10,10 @@ from app.main import (
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
-    _name_and_service_followup_reply,
-    _name_only_followup_reply,
     _reply_target,
     _send_reply,
-    _service_only_followup_reply,
     _should_send_initial_greeting,
+    _technical_fallback_reply,
     _webhook_dedupe_key,
 )
 from app.models import MessageRole
@@ -34,6 +32,7 @@ def test_webhook_secret_allows_event_suffix() -> None:
 
 def test_human_handover_marker_is_detected() -> None:
     assert needs_human_handover("Quiero hablar con una persona por una queja")
+    assert not needs_human_handover("Soy una persona que quiere uñas")
 
 
 def test_pricing_estimate_adds_base_retiro_and_nail_art() -> None:
@@ -114,40 +113,7 @@ def test_initial_greeting_is_used_only_without_history_or_memory() -> None:
     assert "nombre" in INITIAL_GREETING_REPLY
 
 
-def test_name_only_reply_after_initial_greeting_does_not_need_llm() -> None:
-    history = [
-        type(
-            "Interaction",
-            (),
-            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
-        )()
-    ]
-
-    reply = _name_only_followup_reply("Marco", history)
-
-    assert reply is not None
-    assert "Gracias, Marco" in reply
-    assert "qué servicio buscas" in reply
-
-
-def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> None:
-    history = [
-        type(
-            "Interaction",
-            (),
-            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
-        )()
-    ]
-
-    reply = _name_and_service_followup_reply("Alejandra, quiero hacerme uñas", history)
-
-    assert reply is not None
-    assert "Gracias, Alejandra" in reply
-    assert "producto para retirar" in reply
-    assert "tono liso o diseño" in reply
-
-
-def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
+def test_technical_fallback_does_not_offer_human_handover() -> None:
     history = [
         type(
             "Interaction",
@@ -158,12 +124,13 @@ def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
             },
         )()
     ]
+    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="Uñas")
 
-    reply = _service_only_followup_reply("Uñas", history)
+    reply = _technical_fallback_reply(payload, history)
 
-    assert reply is not None
-    assert "producto para retirar" in reply
-    assert "tono liso o diseño" in reply
+    assert "humana" not in reply
+    assert "persona" not in reply
+    assert "detalle técnico" in reply
 
 
 def test_reply_target_prefers_sender_for_lid_webhook() -> None:
