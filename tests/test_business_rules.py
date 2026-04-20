@@ -214,6 +214,29 @@ def test_technical_fallback_does_not_offer_human_handover() -> None:
     assert "detalle técnico" in reply
 
 
+def test_technical_fallback_uses_local_recovery_for_nail_options() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.assistant,
+                "content": "¡Perfecto! Para orientarte mejor con tu servicio de uñas, ¿traes algún producto para retirar y buscas tono liso o diseño? 💗",
+            },
+        )()
+    ]
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="Si necesito retiro de acrilico, que tipos de uñas manejas?",
+    )
+
+    reply = _technical_fallback_reply(payload, history)
+
+    assert "detalle técnico" not in reply
+    assert "Retiro de Gel/Acrílico: $150" in reply
+    assert "Gelish en manos: $350" in reply
+
+
 def test_reply_target_prefers_sender_for_lid_webhook() -> None:
     payload = EvolutionWebhookPayload.model_validate(
         {

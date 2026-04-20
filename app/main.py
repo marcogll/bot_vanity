@@ -272,27 +272,6 @@ async def _handle_webhook_payload(
         logger.info("Name-only reply handled without LLM for %s", payload.remote_jid)
         return
 
-    name_and_service_reply = _name_and_service_followup_reply(payload.message, history)
-    if name_and_service_reply:
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_and_service_reply)
-        await _send_reply(payload, name_and_service_reply)
-        logger.info("Name-and-service reply handled without LLM for %s", payload.remote_jid)
-        return
-
-    service_only_reply = _service_only_followup_reply(payload.message, history)
-    if service_only_reply:
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, service_only_reply)
-        await _send_reply(payload, service_only_reply)
-        logger.info("Service-only reply handled without LLM for %s", payload.remote_jid)
-        return
-
-    nail_options_reply = _nail_options_followup_reply(payload.message, history)
-    if nail_options_reply:
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, nail_options_reply)
-        await _send_reply(payload, nail_options_reply)
-        logger.info("Nail options reply handled without LLM for %s", payload.remote_jid)
-        return
-
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
 
@@ -386,6 +365,9 @@ def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[In
             "Recibí tu archivo, pero tuve un detalle para leerlo en este momento. "
             "¿Me confirmas por mensaje la sucursal, fecha y hora que aparecen en tu cita? 💗"
         )
+    recovery_reply = _local_recovery_reply(payload.message, history)
+    if recovery_reply:
+        return recovery_reply
     if history and history[-1].role == MessageRole.assistant:
         return (
             "Perdón, tuve un detalle técnico al procesar tu respuesta. "
@@ -394,6 +376,14 @@ def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[In
     return (
         "Perdón, tuve un detalle técnico al procesar tu mensaje. "
         "¿Me compartes tu nombre para atenderte mejor? 💗"
+    )
+
+
+def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | None:
+    return (
+        _name_and_service_followup_reply(message, history)
+        or _service_only_followup_reply(message, history)
+        or _nail_options_followup_reply(message, history)
     )
 
 
