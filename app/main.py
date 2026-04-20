@@ -265,6 +265,13 @@ async def _handle_webhook_payload(
         logger.info("Initial greeting sent to %s", payload.remote_jid)
         return
 
+    name_only_reply = _name_only_followup_reply(payload.message, history)
+    if name_only_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply)
+        await _send_reply(payload, name_only_reply)
+        logger.info("Name-only reply handled without LLM for %s", payload.remote_jid)
+        return
+
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
 
@@ -349,6 +356,69 @@ def _build_user_content(payload: EvolutionWebhookPayload) -> str | list[dict[str
 
 def _should_send_initial_greeting(history: list[Interaccion], memory: SesionMemoria) -> bool:
     return not history and not memory.resumen_perfil
+
+
+def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_name(history):
+        return None
+    name = _extract_name_only(message)
+    if not name:
+        return None
+    first_name = name.split()[0]
+    return (
+        f"¡Gracias, {first_name}! Encantada de atenderte. 💗 "
+        "Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?"
+    )
+
+
+def _last_assistant_requested_name(history: list[Interaccion]) -> bool:
+    if not history:
+        return False
+    last = history[-1]
+    if last.role != MessageRole.assistant:
+        return False
+    normalized = last.content.casefold()
+    return "nombre" in normalized and "servicio" in normalized
+
+
+def _extract_name_only(message: str) -> str | None:
+    normalized = message.strip()
+    if not normalized:
+        return None
+    lowered = normalized.casefold()
+    blocked_terms = (
+        "hola",
+        "buen",
+        "quiero",
+        "busco",
+        "necesito",
+        "cita",
+        "agenda",
+        "precio",
+        "servicio",
+        "uña",
+        "unas",
+        "manicure",
+        "pedicure",
+        "pedi",
+        "gelish",
+        "acrilic",
+        "acrílic",
+        "pestaña",
+        "lash",
+        "ceja",
+        "brow",
+    )
+    if any(term in lowered for term in blocked_terms):
+        return None
+
+    cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
+    words = cleaned.split()
+    if not 1 <= len(words) <= 4:
+        return None
+    if not re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", cleaned):
+        return None
+    return cleaned
 
 
 def _extract_message_text(message: object, data: dict[str, object] | None = None) -> str:
@@ -738,7 +808,7 @@ async def _handle_memory_delete_confirmation(
 
 def _detect_service(message: str) -> str | None:
     normalized = message.casefold()
-    if any(word in normalized for word in ("uña", "unas", "manicure", "gelish", "acrilic", "acrílic")):
+    if any(word in normalized for word in ("uña", "unas", "manicure", "pedicure", "pedi", "gelish", "acrilic", "acrílic")):
         return "Uñas"
     if any(word in normalized for word in ("pestaña", "lash", "lifting")):
         return "Pestañas"

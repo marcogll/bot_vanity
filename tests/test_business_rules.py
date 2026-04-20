@@ -10,11 +10,13 @@ from app.main import (
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
+    _name_only_followup_reply,
     _reply_target,
     _send_reply,
     _should_send_initial_greeting,
     _webhook_dedupe_key,
 )
+from app.models import MessageRole
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
 
@@ -108,6 +110,22 @@ def test_initial_greeting_is_used_only_without_history_or_memory() -> None:
     assert not _should_send_initial_greeting([], existing_memory)
     assert "Soy Sofía" in INITIAL_GREETING_REPLY
     assert "nombre" in INITIAL_GREETING_REPLY
+
+
+def test_name_only_reply_after_initial_greeting_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )()
+    ]
+
+    reply = _name_only_followup_reply("Marco", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
+    assert "qué servicio buscas" in reply
 
 
 def test_reply_target_prefers_sender_for_lid_webhook() -> None:
