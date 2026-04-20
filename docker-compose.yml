@@ -18,6 +18,9 @@ services:
       LLM_MODEL: ${LLM_MODEL:-gpt-4o}
       MEMORY_RETENTION_DAYS: ${MEMORY_RETENTION_DAYS:-30}
       BOOKING_URL: ${BOOKING_URL:-https://vanitynails.fresh.com}
+      IOS_APP_STORE_URL: ${IOS_APP_STORE_URL:-https://apps.apple.com/app/id1297230801}
+      ANDROID_PLAY_STORE_URL: ${ANDROID_PLAY_STORE_URL:-https://play.google.com/store/apps/details?id=com.fresha.Fresha}
+      PAYMENT_URL: ${PAYMENT_URL:-https://www.paypal.com/ncp/payment/L3AC4D47J3QDN}
       PORT: 8000
     ports:
       - "8001:8000"
