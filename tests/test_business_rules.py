@@ -12,6 +12,7 @@ from app.main import (
     _media_prompt_hint,
     _name_and_service_followup_reply,
     _name_only_followup_reply,
+    _nail_options_followup_reply,
     _reply_target,
     _send_reply,
     _service_only_followup_reply,
@@ -167,6 +168,30 @@ def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
     assert reply is not None
     assert "producto para retirar" in reply
     assert "tono liso o diseño" in reply
+
+
+def test_nail_options_question_does_not_need_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.assistant,
+                "content": "¡Perfecto! Para orientarte mejor con tu servicio de uñas, ¿traes algún producto para retirar y buscas tono liso o diseño? 💗",
+            },
+        )()
+    ]
+
+    reply = _nail_options_followup_reply(
+        "Si necesito retiro de acrilico, que tipos de uñas manejas?",
+        history,
+    )
+
+    assert reply is not None
+    assert "Retiro de Gel/Acrílico: $150" in reply
+    assert "Gelish en manos: $350" in reply
+    assert "Acrílicas" in reply
+    assert "Soft Gel" in reply
 
 
 def test_technical_fallback_does_not_offer_human_handover() -> None:

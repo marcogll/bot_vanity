@@ -286,6 +286,13 @@ async def _handle_webhook_payload(
         logger.info("Service-only reply handled without LLM for %s", payload.remote_jid)
         return
 
+    nail_options_reply = _nail_options_followup_reply(payload.message, history)
+    if nail_options_reply:
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, nail_options_reply)
+        await _send_reply(payload, nail_options_reply)
+        logger.info("Nail options reply handled without LLM for %s", payload.remote_jid)
+        return
+
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await db.commit()
 
@@ -441,6 +448,49 @@ def _service_details_reply(service: str, greeting: str) -> str | None:
             "¿buscas laminado, diseño, depilación o tinte? 💗"
         )
     return None
+
+
+def _nail_options_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    normalized = message.casefold()
+    asks_options = any(
+        phrase in normalized
+        for phrase in (
+            "tipos de uñas",
+            "tipo de uñas",
+            "tipos manejas",
+            "que tipos",
+            "qué tipos",
+            "opciones",
+            "cuales manejas",
+            "cuáles manejas",
+        )
+    )
+    if not asks_options or not _has_recent_nail_context(message, history):
+        return None
+
+    retiro = (
+        "Con retiro de acrílico agregamos Retiro de Gel/Acrílico: $150 | 20 min. "
+        if any(word in normalized for word in ("retiro", "retirar", "quitar", "acrilico", "acrílico"))
+        else ""
+    )
+    return (
+        f"Claro, hermosa. {retiro}Manejamos estas opciones de uñas:\n\n"
+        "Gelish en manos: $350 | 55 min\n"
+        "Manicure Classic: $550 | 80 min\n"
+        "Manicure SPA: $600 | 85 min\n"
+        "Manicure Deluxe: $650 | 90 min\n"
+        "Base Rubber: $750 | 70 min\n"
+        "Acrílicas: #1-#2 $550, #3-#4 $600, #5-#6 $650\n"
+        "Soft Gel: #1-#2 $500, #3-#4 $550\n\n"
+        "Para recomendarte mejor, ¿buscas trabajar sobre tu uña natural o quieres extensión? 💗"
+    )
+
+
+def _has_recent_nail_context(message: str, history: list[Interaccion]) -> bool:
+    if _detect_service(message) == "Uñas":
+        return True
+    recent = " ".join(item.content for item in history[-4:])
+    return _detect_service(recent) == "Uñas"
 
 
 def _last_assistant_requested_service(history: list[Interaccion]) -> bool:
