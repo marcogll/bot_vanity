@@ -1,12 +1,16 @@
 from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
+    BookingAnalysis,
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
     MEMORY_DELETE_CONFIRMATION_REPLY,
+    PaymentAnalysis,
+    _appointment_confirmation_reply,
     _build_user_content,
     _booking_proof_message,
     _clear_memory_delete_pending,
+    _handle_structured_booking_flow,
     _handle_memory_delete_confirmation,
     _audio_filename_from_mimetype,
     _is_audio_payload,
@@ -16,6 +20,7 @@ from app.main import (
     _is_memory_delete_trigger,
     _mark_memory_delete_pending,
     _media_prompt_hint,
+    _payment_confirmation_reply,
     _format_whatsapp_reply,
     _strip_data_url_prefix,
     _looks_like_appointment_confirmation_context,
@@ -140,6 +145,176 @@ def test_booking_proof_message_summarizes_media_metadata() -> None:
     assert "imageMessage" in proof
     assert "image/jpeg" in proof
     assert "confirmacion.jpg" in proof
+
+
+def test_appointment_confirmation_reply_requests_deposit_when_missing() -> None:
+    settings = type("Settings", (), {"payment_url": "https://pay.example/test"})()
+    booking = BookingAnalysis(
+        booking_confirmed=True,
+        appointment_date="2026-04-20",
+        start_time="3:30 p. m.",
+        services=["Gelish"],
+        deposit_status="pending",
+    )
+
+    reply = _appointment_confirmation_reply(booking, settings)
+
+    assert "anticipo de $200" in reply
+    assert "https://pay.example/test" in reply
+
+
+def test_payment_confirmation_reply_confirms_saved_deposit() -> None:
+    booking = BookingAnalysis(booking_confirmed=True, appointment_date="2026-04-20", start_time="3:30 p. m.")
+    payment = PaymentAnalysis(payment_detected=True, transaction_id="ABC123", deposit_status="paid")
+
+    reply = _payment_confirmation_reply(booking, payment)
+
+    assert "Ya quedó registrado tu anticipo" in reply
+    assert "2026-04-20" in reply
+
+
+def test_structured_booking_flow_creates_pending_reply_without_llm(monkeypatch) -> None:
+    class FakeSession:
+        def __init__(self, pending: object) -> None:
+            self.pending = pending
+
+        async def execute(self, statement: object) -> object:
+            class Result:
+                def __init__(self, pending: object) -> None:
+                    self.pending = pending
+
+                def scalar_one_or_none(self) -> object:
+                    return self.pending
+
+            return Result(self.pending)
+
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="[Archivo recibido: imageMessage]",
+        messageType="imageMessage",
+        mediaMimetype="image/jpeg",
+        mediaFilename="confirmacion.jpg",
+        mediaBase64="data:image/jpeg;base64,ZmFrZQ==",
+        hasMedia=True,
+        pushName="Alejandra",
+    )
+    memory = type("Memory", (), {"servicio_interes": "Uñas"})()
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"content": "Mándame tu captura de confirmación y luego te paso el anticipo."},
+        )()
+    ]
+    settings = type("Settings", (), {"booking_url": "https://booking.example", "payment_url": "https://pay.example"})()
+    pending = CitaPendiente(
+        whatsapp_id="5218446686100@s.whatsapp.net",
+        push_name="Alejandra",
+        appointment_proof_message="confirmacion",
+        servicio_interes="Uñas",
+    )
+
+    async def fake_analyze_booking_confirmation(*args: object, **kwargs: object) -> BookingAnalysis:
+        return BookingAnalysis(
+            booking_confirmed=True,
+            appointment_date="2026-04-20",
+            start_time="3:30 p. m.",
+            services=["Gelish"],
+            booking_status="booked",
+            deposit_status="pending",
+        )
+
+    monkeypatch.setattr("app.main._analyze_booking_confirmation", fake_analyze_booking_confirmation)
+
+    import asyncio
+
+    reply = asyncio.run(_handle_structured_booking_flow(FakeSession(pending), payload, memory, history, settings))
+
+    assert reply is not None
+    assert "anticipo de $200" in reply
+    assert pending.booking_status == "booked"
+
+
+def test_structured_booking_flow_completes_pending_payment(monkeypatch) -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.added = []
+            self.deleted = []
+
+        async def execute(self, statement: object) -> object:
+            class Result:
+                def __init__(self, pending: object) -> None:
+                    self.pending = pending
+
+                def scalar_one_or_none(self) -> object:
+                    return self.pending
+
+            return Result(self.pending)
+
+        def add(self, obj: object) -> None:
+            self.added.append(obj)
+
+        async def delete(self, obj: object) -> None:
+            self.deleted.append(obj)
+
+    pending = CitaPendiente(
+        whatsapp_id="5218446686100@s.whatsapp.net",
+        push_name="Alejandra",
+        appointment_proof_message="confirmacion",
+        servicio_interes="Uñas",
+    )
+    pending.booking_data = BookingAnalysis(
+        booking_confirmed=True,
+        appointment_date="2026-04-20",
+        start_time="3:30 p. m.",
+        end_time="4:30 p. m.",
+        services=["Gelish"],
+        total_amount=450.0,
+        currency="MXN",
+        branch_name="Plaza O",
+        booking_status="booked",
+        deposit_status="pending",
+    ).model_dump_json()
+
+    session = FakeSession()
+    session.pending = pending
+
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="[Archivo recibido: imageMessage]",
+        messageType="imageMessage",
+        mediaMimetype="image/jpeg",
+        mediaFilename="paypal.jpg",
+        mediaBase64="data:image/jpeg;base64,ZmFrZQ==",
+        hasMedia=True,
+        pushName="Alejandra",
+    )
+    memory = type("Memory", (), {"servicio_interes": "Uñas"})()
+    settings = type("Settings", (), {"booking_url": "https://booking.example", "payment_url": "https://pay.example"})()
+
+    async def fake_analyze_payment_proof(*args: object, **kwargs: object) -> PaymentAnalysis:
+        return PaymentAnalysis(
+            payment_detected=True,
+            transaction_id="PAY-123",
+            transaction_status="COMPLETED",
+            payer_name="Alejandra",
+            amount=200.0,
+            currency="MXN",
+            deposit_status="paid",
+        )
+
+    monkeypatch.setattr("app.main._analyze_payment_proof", fake_analyze_payment_proof)
+
+    import asyncio
+
+    reply = asyncio.run(_handle_structured_booking_flow(session, payload, memory, [], settings))
+
+    assert reply is not None
+    assert "registrado tu anticipo" in reply
+    assert len(session.added) == 1
+    assert isinstance(session.added[0], CitaCompletada)
+    assert session.added[0].paypal_transaction_id == "PAY-123"
+    assert session.deleted == [pending]
 
 
 def test_audio_payload_helpers_detect_audio_and_filename() -> None:

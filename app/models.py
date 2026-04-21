@@ -93,6 +93,9 @@ class CitaPendiente(Base):
     encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
     servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
     encrypted_appointment_proof_message: Mapped[str | None] = mapped_column("appointment_proof_message", Text, nullable=True)
+    encrypted_booking_data: Mapped[str | None] = mapped_column("booking_data", Text, nullable=True)
+    booking_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    deposit_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     appointment_proof_received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -129,6 +132,14 @@ class CitaPendiente(Base):
     def appointment_proof_message(self, value: str | None) -> None:
         self.encrypted_appointment_proof_message = encrypt_value(value)
 
+    @property
+    def booking_data(self) -> str | None:
+        return decrypt_value(self.encrypted_booking_data)
+
+    @booking_data.setter
+    def booking_data(self, value: str | None) -> None:
+        self.encrypted_booking_data = encrypt_value(value)
+
 
 class CitaCompletada(Base):
     __tablename__ = "citas_completadas"
@@ -140,6 +151,22 @@ class CitaCompletada(Base):
     servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
     encrypted_appointment_proof_message: Mapped[str | None] = mapped_column("appointment_proof_message", Text, nullable=True)
     encrypted_payment_proof_message: Mapped[str | None] = mapped_column("payment_proof_message", Text, nullable=True)
+    encrypted_booking_data: Mapped[str | None] = mapped_column("booking_data", Text, nullable=True)
+    encrypted_payment_data: Mapped[str | None] = mapped_column("payment_data", Text, nullable=True)
+    booking_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    deposit_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    servicios: Mapped[str | None] = mapped_column(Text, nullable=True)
+    total_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    currency: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    appointment_date: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    start_time: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    end_time: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    branch_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    paypal_transaction_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    paypal_transaction_status: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    paypal_payer_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    paypal_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    paypal_currency: Mapped[str | None] = mapped_column(String(12), nullable=True)
     appointment_proof_received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     payment_proof_received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
@@ -181,3 +208,19 @@ class CitaCompletada(Base):
     @payment_proof_message.setter
     def payment_proof_message(self, value: str | None) -> None:
         self.encrypted_payment_proof_message = encrypt_value(value)
+
+    @property
+    def booking_data(self) -> str | None:
+        return decrypt_value(self.encrypted_booking_data)
+
+    @booking_data.setter
+    def booking_data(self, value: str | None) -> None:
+        self.encrypted_booking_data = encrypt_value(value)
+
+    @property
+    def payment_data(self) -> str | None:
+        return decrypt_value(self.encrypted_payment_data)
+
+    @payment_data.setter
+    def payment_data(self, value: str | None) -> None:
+        self.encrypted_payment_data = encrypt_value(value)

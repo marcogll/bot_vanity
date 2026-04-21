@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import io
+import json
 import logging
 import re
 from collections import OrderedDict
@@ -100,6 +101,32 @@ class EvolutionWebhookPayload(BaseModel):
 
 class WebhookResponse(BaseModel):
     message: str
+
+
+class BookingAnalysis(BaseModel):
+    booking_confirmed: bool = False
+    branch_name: str | None = None
+    appointment_date: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    services: list[str] = Field(default_factory=list)
+    total_amount: float | None = None
+    currency: str | None = None
+    booking_status: str | None = None
+    deposit_status: str | None = None
+    deposit_already_paid: bool = False
+    summary: str | None = None
+
+
+class PaymentAnalysis(BaseModel):
+    payment_detected: bool = False
+    transaction_id: str | None = None
+    transaction_status: str | None = None
+    payer_name: str | None = None
+    amount: float | None = None
+    currency: str | None = None
+    deposit_status: str | None = None
+    summary: str | None = None
 
 
 @app.on_event("startup")
@@ -293,6 +320,17 @@ async def _handle_webhook_payload(
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
     await _record_booking_checkpoint(db, payload, memory, history, settings)
     await db.commit()
+
+    structured_booking_reply = await _handle_structured_booking_flow(db, payload, memory, history, settings)
+    if structured_booking_reply:
+        db.add(Interaccion(payload.remote_jid, MessageRole.assistant, structured_booking_reply))
+        memory.push_name = payload.push_name or memory.push_name
+        memory.resumen_perfil = _summarize_profile(memory.resumen_perfil, payload.message, structured_booking_reply)
+        memory.servicio_interes = _detect_service(payload.message) or memory.servicio_interes
+        await db.commit()
+        await _send_reply(payload, structured_booking_reply)
+        logger.info("Structured booking reply generated for %s", payload.remote_jid)
+        return
 
     response_text = await _ask_vanessa(settings, payload, memory, history)
 
@@ -971,24 +1009,13 @@ async def _record_booking_checkpoint(
         return
 
     pending = await _get_pending_booking(db, payload.remote_jid)
-    proof_message = _booking_proof_message(payload)
     if pending:
-        completed = CitaCompletada(
-            whatsapp_id=payload.remote_jid,
-            push_name=payload.push_name or pending.push_name,
-            appointment_proof_message=pending.appointment_proof_message,
-            payment_proof_message=proof_message,
-            servicio_interes=pending.servicio_interes or memory.servicio_interes,
-            appointment_proof_received_at=pending.appointment_proof_received_at,
-        )
-        db.add(completed)
-        await db.delete(pending)
-        logger.info("Booking moved from pending to completed for %s", payload.remote_jid)
         return
 
     if not _looks_like_appointment_confirmation_context(memory, history, settings):
         return
 
+    proof_message = _booking_proof_message(payload)
     pending = CitaPendiente(
         whatsapp_id=payload.remote_jid,
         push_name=payload.push_name or memory.push_name,
@@ -1011,6 +1038,209 @@ def _booking_proof_message(payload: EvolutionWebhookPayload) -> str:
     if payload.media_filename:
         details.append(payload.media_filename)
     return f"{payload.message} ({' | '.join(details)})"
+
+
+async def _handle_structured_booking_flow(
+    db: AsyncSession,
+    payload: EvolutionWebhookPayload,
+    memory: SesionMemoria,
+    history: list[Interaccion],
+    settings: Settings,
+) -> str | None:
+    if not payload.has_media:
+        return None
+
+    pending = await _get_pending_booking(db, payload.remote_jid)
+    has_structured_booking = bool((pending.booking_data or "").strip()) if pending else False
+    if pending and has_structured_booking:
+        payment = await _analyze_payment_proof(payload, settings)
+        if not payment or not payment.payment_detected:
+            return None
+
+        completed = CitaCompletada(
+            whatsapp_id=payload.remote_jid,
+            push_name=payload.push_name or pending.push_name,
+            appointment_proof_message=pending.appointment_proof_message,
+            payment_proof_message=_booking_proof_message(payload),
+            servicio_interes=pending.servicio_interes or memory.servicio_interes,
+            appointment_proof_received_at=pending.appointment_proof_received_at,
+        )
+        completed.booking_data = pending.booking_data
+        completed.payment_data = _serialize_model(payment)
+        completed.booking_status = pending.booking_status or "booked"
+        completed.deposit_status = payment.deposit_status or "paid"
+        booking = _deserialize_model(BookingAnalysis, pending.booking_data)
+        if booking:
+            completed.servicios = json.dumps(booking.services, ensure_ascii=True)
+            completed.total_amount = booking.total_amount
+            completed.currency = booking.currency
+            completed.appointment_date = booking.appointment_date
+            completed.start_time = booking.start_time
+            completed.end_time = booking.end_time
+            completed.branch_name = booking.branch_name
+        completed.paypal_transaction_id = payment.transaction_id
+        completed.paypal_transaction_status = payment.transaction_status
+        completed.paypal_payer_name = payment.payer_name
+        completed.paypal_amount = payment.amount
+        completed.paypal_currency = payment.currency
+        db.add(completed)
+        await db.delete(pending)
+        logger.info("Booking moved from pending to completed for %s", payload.remote_jid)
+        return _payment_confirmation_reply(booking, payment)
+
+    if not pending and not _looks_like_appointment_confirmation_context(memory, history, settings):
+        return None
+
+    booking = await _analyze_booking_confirmation(payload, settings)
+    if not booking or not booking.booking_confirmed:
+        return None
+
+    pending = pending or await _get_pending_booking(db, payload.remote_jid)
+    if not pending:
+        return None
+    pending.booking_data = _serialize_model(booking)
+    pending.booking_status = booking.booking_status or "booked"
+    pending.deposit_status = booking.deposit_status or ("paid" if booking.deposit_already_paid else "pending")
+    pending.servicio_interes = (
+        ", ".join(booking.services) if booking.services else pending.servicio_interes or memory.servicio_interes
+    )
+    return _appointment_confirmation_reply(booking, settings)
+
+
+def _serialize_model(model: BaseModel | None) -> str | None:
+    if model is None:
+        return None
+    return model.model_dump_json(exclude_none=True)
+
+
+def _deserialize_model(model_cls: type[BaseModel], payload: str | None) -> BaseModel | None:
+    if not payload:
+        return None
+    try:
+        return model_cls.model_validate_json(payload)
+    except Exception:
+        logger.warning("Unable to decode stored model payload for %s", model_cls.__name__)
+        return None
+
+
+async def _analyze_booking_confirmation(
+    payload: EvolutionWebhookPayload,
+    settings: Settings,
+) -> BookingAnalysis | None:
+    image_data_url = _image_media_data_url(payload)
+    if not image_data_url:
+        return None
+    prompt = (
+        "Analiza esta captura de confirmacion de una cita de salon. "
+        "Extrae solo datos visibles con claridad. "
+        "Responde JSON valido con las llaves exactas: "
+        "booking_confirmed, branch_name, appointment_date, start_time, end_time, "
+        "services, total_amount, currency, booking_status, deposit_status, deposit_already_paid, summary. "
+        "booking_confirmed debe ser true solo si la captura muestra una cita reservada. "
+        "services debe ser un arreglo de strings. "
+        "booking_status usa booked si se ve confirmada la cita. "
+        "deposit_status usa paid, pending o unknown."
+    )
+    return await _analyze_media_json(payload, settings, prompt, BookingAnalysis)
+
+
+async def _analyze_payment_proof(
+    payload: EvolutionWebhookPayload,
+    settings: Settings,
+) -> PaymentAnalysis | None:
+    image_data_url = _image_media_data_url(payload)
+    if not image_data_url:
+        return None
+    prompt = (
+        "Analiza este comprobante de pago o anticipo, idealmente de PayPal. "
+        "Extrae solo datos visibles con claridad. "
+        "Responde JSON valido con las llaves exactas: "
+        "payment_detected, transaction_id, transaction_status, payer_name, amount, currency, deposit_status, summary. "
+        "payment_detected debe ser true solo si la imagen muestra evidencia suficiente de pago o transaccion. "
+        "deposit_status usa paid, pending, failed o unknown."
+    )
+    return await _analyze_media_json(payload, settings, prompt, PaymentAnalysis)
+
+
+async def _analyze_media_json(
+    payload: EvolutionWebhookPayload,
+    settings: Settings,
+    prompt: str,
+    model_cls: type[BaseModel],
+) -> BaseModel | None:
+    image_data_url = _image_media_data_url(payload)
+    if not image_data_url:
+        return None
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    try:
+        completion = await client.chat.completions.create(
+            model=settings.llm_model,
+            temperature=0,
+            max_tokens=350,
+            response_format={"type": "json_object"},
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Responde solamente JSON valido. No inventes datos que no esten visibles.",
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
+                    ],
+                },
+            ],
+        )
+    except Exception:
+        logger.exception("Structured media analysis failed for %s", payload.remote_jid)
+        return None
+
+    content = completion.choices[0].message.content
+    if not content:
+        return None
+    try:
+        return model_cls.model_validate_json(content)
+    except Exception:
+        logger.warning("Invalid structured media analysis response for %s: %s", payload.remote_jid, content)
+        return None
+
+
+def _appointment_confirmation_reply(booking: BookingAnalysis, settings: Settings) -> str:
+    if booking.deposit_already_paid or (booking.deposit_status or "").casefold() == "paid":
+        return (
+            f"Gracias, hermosa. Ya vi tu cita{_booking_summary_fragment(booking)} y el anticipo aparece como pagado. "
+            "Quedó todo registrado. 💗"
+        )
+    return (
+        f"Gracias, hermosa. Ya vi tu cita{_booking_summary_fragment(booking)}. "
+        f"Para asegurar tu espacio, puedes hacer tu anticipo de $200 aquí: {settings.payment_url} 💗"
+    )
+
+
+def _payment_confirmation_reply(booking: BookingAnalysis | None, payment: PaymentAnalysis) -> str:
+    details = []
+    if booking and booking.appointment_date:
+        details.append(booking.appointment_date)
+    if booking and booking.start_time:
+        details.append(booking.start_time)
+    context = f" para tu cita del {' '.join(details)}" if details else ""
+    return (
+        f"Gracias, hermosa. Ya quedó registrado tu anticipo{context}. "
+        "Tu lugar está asegurado y ya tengo guardado el comprobante. 💗"
+    )
+
+
+def _booking_summary_fragment(booking: BookingAnalysis) -> str:
+    parts = []
+    if booking.appointment_date:
+        parts.append(booking.appointment_date)
+    if booking.start_time:
+        parts.append(booking.start_time)
+    if booking.services:
+        parts.append(", ".join(booking.services))
+    return f" ({' | '.join(parts)})" if parts else ""
 
 
 def _looks_like_appointment_confirmation_context(
