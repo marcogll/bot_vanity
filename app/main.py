@@ -514,6 +514,9 @@ def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str |
     if not name:
         return None
     first_name = name.split()[0]
+    prior_service = _service_from_recent_user_context(history)
+    if prior_service:
+        return _service_details_reply(prior_service, _followup_greeting_from_recent_user_context(first_name, history))
     return (
         f"¡Gracias, {first_name}! Encantada de atenderte. 💗 "
         "Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?"
@@ -601,6 +604,27 @@ def _has_recent_nail_context(message: str, history: list[Interaccion]) -> bool:
         return True
     recent = " ".join(item.content for item in history[-4:])
     return _detect_service(recent) == "Uñas"
+
+
+def _service_from_recent_user_context(history: list[Interaccion]) -> str | None:
+    for item in reversed(history):
+        if item.role != MessageRole.user:
+            continue
+        service = _detect_service(item.content)
+        if service:
+            return service
+    return None
+
+
+def _followup_greeting_from_recent_user_context(first_name: str, history: list[Interaccion]) -> str:
+    for item in reversed(history):
+        if item.role != MessageRole.user:
+            continue
+        normalized = item.content.casefold()
+        if any(token in normalized for token in ("agendar", "agenda", "cita", "reservar")):
+            return f"¡Gracias, {first_name}! Ya vi que buscas agendar. "
+        break
+    return f"¡Gracias, {first_name}! "
 
 
 def _last_assistant_requested_service(history: list[Interaccion]) -> bool:

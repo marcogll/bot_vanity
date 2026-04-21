@@ -423,6 +423,33 @@ def test_name_only_reply_after_initial_greeting_does_not_need_llm() -> None:
     assert "qué servicio buscas" in reply
 
 
+def test_name_only_reply_uses_prior_audio_intent_after_initial_greeting() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.user,
+                "content": "[Audio transcrito]\nHola, buenas noches, quisiera agendar servicio de uñas para el día miércoles.",
+            },
+        )(),
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )(),
+    ]
+
+    reply = _name_only_followup_reply("Marco", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
+    assert "buscas agendar" in reply
+    assert "producto para retirar" in reply
+    assert "tono liso o diseño" in reply
+    assert "qué servicio buscas" not in reply
+
+
 def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> None:
     history = [
         type(
