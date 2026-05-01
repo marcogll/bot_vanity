@@ -16,6 +16,10 @@ class KnowledgeEngine:
         "promos.md",
         "db.md",
     )
+    OPTIONAL_DOCS = (
+        "conversation_rules.md",
+        "../whatsapp_interactions/messaging_selfimp.md",
+    )
     EVOLUTION_DOC_CANDIDATES = (
         "create_evolution_bot.md",
         "create_evolution_bot_instructions.md",
@@ -35,6 +39,10 @@ class KnowledgeEngine:
                 missing.append(str(path))
                 continue
             loaded[filename] = path.read_text(encoding="utf-8")
+        for filename in self.OPTIONAL_DOCS:
+            path = self.docs_path / filename
+            if path.exists():
+                loaded[filename] = path.read_text(encoding="utf-8")
         evolution_doc = self._load_first_existing(self.EVOLUTION_DOC_CANDIDATES)
         if evolution_doc is None:
             missing.append(
@@ -85,6 +93,12 @@ Contexto previo del cliente:
 {memory}
 
 Reglas operativas obligatorias:
+- Las reglas conversacionales de `messaging_selfimp.md` o `conversation_rules.md`, si están presentes, tienen prioridad sobre cualquier ejemplo o flujo más genérico.
+- No reinicies conversaciones ya avanzadas. Si el nombre, servicio, cita o contexto ya están claros, continúa desde ahí.
+- Si detectas que una respuesta llega tarde y el contexto ya cambió, no respondas como si el mensaje acabara de llegar; adapta la respuesta al estado actual o guarda silencio si ya no aportas valor.
+- Si ya hubo respuesta humana útil o la duda principal ya quedó resuelta, no dupliques, no repitas links y no reabras el flujo.
+- No contradigas precios, horarios, servicios o confirmaciones ya dadas sin validación documental explícita.
+- No empujes la app o la liga de agendamiento si WhatsApp ya está resolviendo la solicitud, la incidencia o el reacomodo por este medio.
 - No proporciones la liga de agendamiento hasta haber preguntado por Retiro y Nail Art cuando el servicio sea de uñas.
 - Si el cliente busca pestañas, pregunta por Retiro de Pestañas antes de cotizar o cerrar.
 - Usa solo precios, duraciones y promociones presentes en los documentos.

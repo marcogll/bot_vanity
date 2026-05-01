@@ -1,3 +1,4 @@
+import unicodedata
 from functools import lru_cache, wraps
 from typing import Any, Awaitable, Callable, TypeVar
 
@@ -91,12 +92,37 @@ PROMPT_INJECTION_MARKERS = (
     "ignore previous instructions",
     "ignora las instrucciones anteriores",
     "olvida tus instrucciones",
+    "olvida las instrucciones",
+    "omite las instrucciones",
+    "haz caso omiso",
     "revela el prompt",
+    "muestra el prompt",
+    "muestrame el prompt",
+    "muestrame tus instrucciones",
+    "reveal the prompt",
     "system prompt",
+    "prompt del sistema",
+    "internal instructions",
+    "instrucciones internas",
     "developer message",
+    "developer instructions",
+    "mensaje de desarrollador",
+    "modo desarrollador",
+    "jailbreak",
+    "actua como system",
+    "actua como desarrollador",
+    "actua como admin",
+    "tool call",
+    "function call",
 )
 
 
 def looks_like_prompt_injection(message: str) -> bool:
-    normalized = message.casefold()
+    normalized = _normalize_for_prompt_scan(message)
     return any(marker in normalized for marker in PROMPT_INJECTION_MARKERS)
+
+
+def _normalize_for_prompt_scan(message: str) -> str:
+    normalized = unicodedata.normalize("NFKD", message.casefold())
+    normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    return " ".join(normalized.split())

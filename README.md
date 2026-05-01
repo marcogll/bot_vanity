@@ -5,9 +5,10 @@ asistente virtual de Vanity Nail Salon.
 
 ## Estado actual
 
-- Sofía se presenta en la primera interacción y pide el nombre del cliente antes de continuar.
+- Sofía ya no pide el nombre de forma ciega cuando la conversación llega avanzada, por ejemplo con capturas, comprobantes o contexto claro de cita.
 - El webhook deduplica eventos repetidos de Evolution usando el ID del mensaje para evitar respuestas dobles.
 - Evolution corre con `evoapicloud/evolution-api:v2.3.7` para soporte actualizado de `@lid` y mapeo PN/LID.
+- Las reglas conversacionales de WhatsApp se cargan desde `whatsapp_interactions/messaging_selfimp.md`.
 
 ## Setup local en Arch/Omarchy
 
@@ -162,14 +163,14 @@ docker exec "$APP" python -c 'import inspect, app.main as m; print("has_local_re
 ## Comando De Borrado Global
 
 `dipiridú` es un comando administrativo raro a propósito. Cuando Sofía recibe
-exactamente esa palabra, pide confirmación. Si se responde `sí`, borra toda la
-base de memoria e historial:
+exactamente esa palabra, pide confirmación. Si se responde `sí`, borra solo la
+memoria e historial del chat actual:
 
-- todas las filas de `interacciones`;
-- todas las filas de `sesiones_memoria`.
+- filas de `interacciones` de ese `whatsapp_id`;
+- fila de `sesiones_memoria` de ese `whatsapp_id`;
+- registros relacionados en `citas_pendientes` y `citas_completadas`.
 
-No borra solo la conversación del usuario que lo envió. La confirmación existe
-para evitar borrados accidentales.
+La confirmación existe para evitar borrados accidentales.
 
 Solo el número configurado en `ADMIN_PHONE_NUMBER` puede iniciar o confirmar este
 comando. Usa el número en formato dígitos, sin `+`, espacios ni guiones.

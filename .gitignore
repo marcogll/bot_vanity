@@ -5,3 +5,11 @@ __pycache__/
 .pytest_cache/
 .env
 .env.production
+
+# Local chat analysis artifacts
+whatsapp_interactions/*
+!whatsapp_interactions/messaging_selfimp.md
+
+# Local Docker runtime artifacts
+.docker/
+docker-data/

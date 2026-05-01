@@ -224,3 +224,19 @@ class CitaCompletada(Base):
     @payment_data.setter
     def payment_data(self, value: str | None) -> None:
         self.encrypted_payment_data = encrypt_value(value)
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+    __table_args__ = (
+        Index("ix_webhook_events_whatsapp_id_created_at", "whatsapp_id", "created_at"),
+        Index("ix_webhook_events_event_kind_created_at", "event_kind", "created_at"),
+        Index("ix_webhook_events_event_key", "event_key", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_kind: Mapped[str] = mapped_column(String(40), nullable=False)
+    whatsapp_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    instance_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    event_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)

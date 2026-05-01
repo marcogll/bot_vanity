@@ -14,3 +14,7 @@ Sofía responde por Evolution usando:
 - `EVOLUTION_API_KEY` para autenticar el envío.
 
 El webhook debe ignorar mensajes enviados por la propia cuenta conectada para evitar loops.
+
+Para configuración enfocada en latencia, eventos mínimos y reducción de ruido operativo, ver también:
+
+- `docs/evolution_api_latency_guide.md`

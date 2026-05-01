@@ -84,3 +84,71 @@ Funciones específicas de Vanity Nail Salon.
 - Ya existe prueba unitaria para anti-injection, handover, calculadora de precio, deduplicación y saludo inicial.
 - Pendiente: tests de integración del webhook con DB temporal y mock de OpenAI.
 - Pendiente: test específico de vigencia de promociones con fecha inyectada fuera de abril 2026.
+
+## Fase 7: Estabilización Conversacional de Sofía 🧭
+Implementación guiada por análisis de chats reales, en especial los incidentes del `23-24 abril 2026` y el estilo operativo de `staff1`.
+
+- [ ] Modelo de estado conversacional: Introducir un estado formal por conversación para distinguir al menos `new`, `collecting_service`, `booking_link_sent`, `awaiting_booking_proof`, `awaiting_deposit`, `confirmed`, `incident`, `handover_human`.
+- [x] Señales de contexto alto: Detectar explícitamente comprobantes, capturas de cita, fotos de uñas, mensajes de tráfico, reacomodos y confirmaciones para evitar reinicios de flujo.
+- [x] Guardas de saludo inicial: Dejar de pedir nombre automáticamente si ya existe historial útil, memoria previa o evidencia de contexto avanzado.
+- [ ] Supresión de respuestas obsoletas: Cancelar o regenerar respuestas si el contexto cambió mientras el modelo tardó en responder.
+- [x] Follow-up inteligente: Reemplazar el follow-up fijo `¿Pudiste elegir tu horario...?` por uno condicionado al estado real y cancelable si ya hubo respuesta humana o confirmación.
+- [x] Detección de actividad humana reciente: Si una humana ya respondió útilmente en una ventana corta, Sofía no debe duplicar ni reabrir el flujo.
+- [ ] Reglas de booking por contexto: No empujar Fresha cuando WhatsApp ya está resolviendo manualmente disponibilidad, reacomodo, incidencia o confirmación.
+- [x] Separación estilo vs capacidad: Sofía debe heredar el tono de `staff1`, pero no asumir facultades de agendado manual que pertenecen a recepción humana.
+- [x] Política de comprobantes: Si llega comprobante de anticipo o captura de cita, entrar a flujo de validación y confirmación, nunca a onboarding.
+- [x] Estilo `staff1`: Traducir el patrón humano observado a reglas de longitud, tono y orden de preguntas para que Sofía replique una recepcionista real.
+- [x] Guía Evolution API para latencia: Documentar la configuración recomendada de webhook, eventos y base64 para reducir ruido y retraso.
+- [ ] Riesgo de contradicción: Antes de responder con precios, servicios u horarios, validar si ya existe una versión previa confirmada en la conversación o en estado persistido.
+- [x] Telemetría conversacional: Registrar por qué se respondió, se silenció, se hizo handover o se canceló un follow-up para depuración posterior.
+
+**Plan técnico sugerido por capa:**
+
+- `app/models.py`
+  Crear una tabla o ampliar `SesionMemoria`/`CitaPendiente` con estado conversacional, última intención detectada, último momento de intervención humana y banderas como `booking_proof_received`, `deposit_proof_received`, `human_active`.
+
+- `app/main.py`
+  Insertar un preprocesador determinístico antes del LLM que:
+  1. clasifique el mensaje entrante
+  2. actualice estado
+  3. decida si aplica saludo inicial, flujo estructurado, LLM, redirección a booking, silencio o follow-up cancelado
+
+- `app/main.py`
+  Refactorizar `_should_send_initial_greeting()` para que dependa de contexto real y no solo de `no history`.
+
+- `app/main.py`
+  Reemplazar `_schedule_follow_up()` y `_send_follow_up_if_no_reply()` por una versión basada en estado, con cancelación si:
+  1. hubo nuevo mensaje del usuario
+  2. hubo respuesta humana
+  3. la cita ya está confirmada
+  4. se recibió captura/comprobante
+  5. el tema cambió a incidencia o reacomodo
+
+- `app/business_rules.py`
+  Expandir reglas determinísticas para detectar:
+  1. incidentes
+  2. clienta en camino
+  3. reacomodo
+  4. comprobante/captura
+  5. conversación ya resuelta por humana
+
+- `app/knowledge_engine.py` y `docs/system_prompt.md`
+  Mantener la guía conversacional como apoyo del modelo, dejando explícito que Sofía copia el estilo de `staff1` pero no su autoridad para agendar manualmente.
+
+- `tests/test_business_rules.py`
+  Agregar pruebas para los casos reales observados:
+  1. no pedir nombre tras comprobante
+  2. no mandar Fresha si ya hay cita en conversación
+  3. no disparar follow-up obsoleto
+  4. no contradecir precio previo confirmado
+  5. silencio cuando ya respondió una humana
+  6. tono corto estilo `staff1` en respuestas estructuradas
+
+**Criterios de éxito:**
+
+- Sofía no reinicia conversaciones activas.
+- Sofía no manda ráfagas ni follow-ups obsoletos.
+- Sofía no pide nombre después de una captura o comprobante.
+- Sofía no insiste con Fresha cuando la recepción ya resolvió por chat.
+- Sofía replica un estilo breve, cálido y contextual parecido al de `staff1`, pero conserva un flujo honesto de `redirigir a booking + validar confirmación`.
+- Los incidentes del patrón `24/04/26` quedan cubiertos por pruebas automatizadas.
