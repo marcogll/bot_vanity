@@ -154,6 +154,15 @@ async def startup() -> None:
     app.state.test_session_tasks = set()
     app.state.processed_webhook_ids = OrderedDict()
     app.state.recent_outbound_signatures = OrderedDict()
+    allowed_test_numbers = _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
+    logger.info(
+        "Startup config: env=%s test_mode_enabled=%s test_mode_allowed_numbers=%s test_mode_export_webhook_configured=%s evolution_instance=%s",
+        settings.env,
+        settings.test_mode_enabled,
+        len(allowed_test_numbers),
+        bool(settings.test_mode_export_webhook_url.strip()),
+        settings.evolution_instance_name,
+    )
 
 
 @app.on_event("shutdown")
