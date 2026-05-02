@@ -1,19 +1,70 @@
-# Sofía Bot Vanity
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/marcogll/mg_data_storage/b1b4035928e086f9394baf9988f80f4b0075ae20/soul23/logo/s23_logo_wh.png">
+    <img src="https://raw.githubusercontent.com/marcogll/mg_data_storage/b1b4035928e086f9394baf9988f80f4b0075ae20/soul23/logo/s23_logo_blk.png" alt="Soul23" width="110">
+  </picture>
+</p>
 
-Backend FastAPI para procesar webhooks de Evolution API y responder como Sofía,
-asistente virtual de Vanity Nail Salon.
+<h1 align="center">Sofía Bot Vanity</h1>
+
+<p align="center">
+  Backend FastAPI para WhatsApp con Evolution API, RAG en Markdown y reglas conversacionales endurecidas para Sofía.
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-111111?style=flat-square&logo=python&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-111111?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-111111?style=flat-square&logo=postgresql&logoColor=white">
+  <img alt="Evolution API" src="https://img.shields.io/badge/Evolution_API-v2.3.7-111111?style=flat-square">
+  <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-gpt--4o-111111?style=flat-square">
+  <img alt="Mode" src="https://img.shields.io/badge/Test_Mode-supported-111111?style=flat-square">
+</p>
+
+## Resumen
+
+Sofía atiende mensajes de WhatsApp para Vanity Nail Salon. El sistema responde consultas, guía al agendamiento en Fresha, valida capturas y comprobantes, y prioriza la intervención humana cuando corresponde.
+
+El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_interactions/messaging_selfimp.md](/home/marco/Work/code/bot_vanity/whatsapp_interactions/messaging_selfimp.md), con foco en:
+
+- no reiniciar conversaciones avanzadas
+- no pedir nombre ciegamente
+- no responder encima de recepción humana
+- no filtrar texto interno al usuario
+- limitar la memoria conversacional a `24h`, o `48h` si existe booking/cita activa o reciente
 
 ## Estado actual
 
-- Sofía ya no pide el nombre de forma ciega cuando la conversación llega avanzada, por ejemplo con capturas, comprobantes o contexto claro de cita.
-- El webhook deduplica eventos repetidos de Evolution usando el ID del mensaje para evitar respuestas dobles.
-- Evolution corre con `evoapicloud/evolution-api:v2.3.7` para soporte actualizado de `@lid` y mapeo PN/LID.
-- Las reglas conversacionales de WhatsApp se cargan desde `whatsapp_interactions/messaging_selfimp.md`.
+- Deduplicación de webhooks por `instance + remote_jid + session_id`
+- Transcripción de audio antes del flujo principal
+- Análisis estructurado de capturas de cita y comprobantes
+- Cifrado at-rest de mensajes y nombres
+- Protección básica contra prompt injection en texto y audio
+- Sanitización final para impedir fuga de texto interno
+- Modo test con allowlist, export JSON y purge automático por sesión
 
-## Setup local en Arch/Omarchy
+## Estructura
 
-No instales dependencias con `pip` global. Arch marca Python como entorno
-administrado externamente, por lo que debes usar un virtualenv del proyecto:
+```text
+app/
+  main.py                  webhook, orquestación, follow-ups, modo test
+  knowledge_engine.py      system prompt + docs Markdown
+  business_rules.py        reglas determinísticas
+  models.py                interacciones, memoria, citas, webhook events
+docs/
+  system_prompt.md
+  knowledge_base.md
+  promos.md
+  db.md
+  evolution_api_latency_guide.md
+whatsapp_interactions/
+  messaging_selfimp.md
+tests/
+  test_business_rules.py
+```
+
+## Setup local
+
+No instales dependencias con `pip` global. Usa `.venv`:
 
 ```bash
 python -m venv .venv
@@ -21,50 +72,153 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Si no activas el virtualenv, ejecuta los binarios directamente:
+Si no activas el virtualenv:
 
 ```bash
 .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.main:app --reload
+.venv/bin/uvicorn app.main:app --reload --port 8001
 ```
 
 ## Variables de entorno
 
-Crea un `.env` basado en `.env.example`.
+Parte de [`.env.example`](/home/marco/Work/code/bot_vanity/.env.example) y ajusta valores reales.
 
-Modelo recomendado:
+Variables críticas:
 
-```env
-LLM_MODEL=gpt-4o
-AUDIO_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
-```
+- `OPENAI_API_KEY`
+- `AES_ENCRYPTION_KEY`
+- `WEBHOOK_SECRET`
+- `DATABASE_URL`
+- `EVOLUTION_API_URL`
+- `EVOLUTION_API_KEY`
+- `EVOLUTION_INSTANCE_NAME`
+- `BOOKING_URL`
+- `PAYMENT_URL`
 
-`OPENAI_API_KEY` debe ser la llave completa de OpenAI. Si queda truncada, por ejemplo
-`sk-proj-`, Sofía no podrá usar la knowledge base ni promociones y caerá al fallback
-técnico.
-
-Genera una clave válida para cifrado:
+Genera una llave Fernet válida:
 
 ```bash
 .venv/bin/python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
-Coloca el resultado en `AES_ENCRYPTION_KEY`.
+## Modo test
 
-## Ejecutar
+El modo test permite probar Sofía solo con ciertos teléfonos, mientras el resto queda para recepción humana.
 
-Levanta PostgreSQL local:
+Ejemplo:
 
-```bash
-docker compose up -d vanessa-db
+```env
+TEST_MODE_ENABLED=true
+TEST_MODE_ALLOWED_NUMBERS=528448087770,528445949068,528441565066
+TEST_MODE_EXPORT_WEBHOOK_URL=https://tu-endpoint.example.com/sofia-test-export
+TEST_MODE_EXPORT_WEBHOOK_AUTH_HEADER=token_sofia
+TEST_MODE_EXPORT_WEBHOOK_AUTH_VALUE=change-me
+TEST_MODE_SESSION_MINUTES=15
 ```
 
-Con el `.env` configurado:
+Comportamiento:
+
+- Sofía solo responde a los números listados en `TEST_MODE_ALLOWED_NUMBERS`
+- los demás chats se ignoran desde el bot
+- tras `TEST_MODE_SESSION_MINUTES` sin actividad, se exporta la sesión como JSON
+- si el webhook responde bien, se purga historial, memoria y citas de ese chat
+
+Payload exportado:
+
+- `mode`
+- `exported_at` y `exported_at_local`
+- `whatsapp_id` y `phone_number`
+- `push_name`
+- `profile_summary`
+- `service_interest`
+- `history[]` con `timestamp`, `timestamp_local`, `role`, `content`
+- `pending_booking`
+- `completed_booking`
+
+## Reglas conversacionales
+
+Sofía no debe copiar la autoridad operativa de recepción humana. Su rol es:
+
+- orientar
+- cotizar
+- redirigir a booking cuando aplica
+- validar confirmación o comprobantes
+- escalar o quedarse callada si una humana ya resolvió
+
+El estilo objetivo viene de chats reales documentados en:
+
+- [messaging_selfimp.md](/home/marco/Work/code/bot_vanity/whatsapp_interactions/messaging_selfimp.md)
+- [docs/system_prompt.md](/home/marco/Work/code/bot_vanity/docs/system_prompt.md)
+
+## Contexto y memoria
+
+La memoria ya no se usa abierta indefinidamente.
+
+- conversación general: contexto útil de `24h`
+- booking o cita activa/reciente: hasta `48h`
+- si no hay contexto activo, Sofía trata el mensaje como conversación nueva
+
+Esto evita que retome temas viejos sin relación con el request actual.
+
+## Seguridad y robustez
+
+- cifrado Fernet para contenido sensible
+- filtro anti prompt injection en texto y audios transcritos
+- instrucciones defensivas en análisis de imágenes
+- dedupe persistente de webhooks
+- saneamiento de mensajes internos antes de enviar a WhatsApp
+- rate limiting por usuario
+
+## Comando administrativo
+
+El trigger administrativo se configura por env:
+
+```env
+ADMIN_PHONE_NUMBER=528441026472
+MEMORY_DELETE_TRIGGER=dipiridú
+```
+
+Comportamiento actual:
+
+- solo admins autorizados pueden dispararlo
+- pide confirmación
+- borra solo el chat actual, no toda la base
+
+Si luego necesitas más de un admin, también existe:
+
+```env
+ADMIN_PHONE_NUMBERS=528441026472,528445047771
+```
+
+## Docker
+
+Construcción local:
 
 ```bash
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8001
+docker build -t marcogll/vanessa-bot-vanity:latest .
 ```
+
+Stack completo:
+
+```bash
+docker compose up -d --build
+```
+
+Servicios:
+
+- `vanessa-app`
+- `vanessa-db`
+- `evolution-api`
+- `evolution-db`
+- `evolution-redis`
+
+Logs:
+
+```bash
+docker compose logs -f vanessa-app evolution-api
+```
+
+## Verificación de producción
 
 Healthcheck:
 
@@ -72,145 +226,24 @@ Healthcheck:
 curl http://127.0.0.1:8001/health
 ```
 
-## Docker
-
-Para construir la imagen de Sofía:
-
-```bash
-docker build -t <docker-user>/vanessa-bot-vanity:latest .
-```
-
-Para publicarla en Docker Hub:
-
-```bash
-docker push <docker-user>/vanessa-bot-vanity:latest
-```
-
-Para levantar el stack completo en el VPS:
-
-```bash
-docker compose up -d --build
-```
-
-El stack levanta:
-
-- `vanessa-app`: backend FastAPI.
-- `vanessa-db`: PostgreSQL de Sofía.
-- `evolution-api`: instancia de Evolution API v2.3.7.
-- `evolution-db`: PostgreSQL de Evolution.
-- `evolution-redis`: cache de Evolution.
-
-La app queda publicada en:
-
-```text
-http://127.0.0.1:8001
-```
-
-Evolution queda disponible dentro de la red Docker en:
-
-```text
-http://evolution-api:8080
-```
-
-En producción configura `EVOLUTION_SERVER_URL` con el dominio público de Evolution,
-por ejemplo `https://evo.tu-dominio.com`, y usa el mismo `EVOLUTION_API_KEY` para
-autenticar llamadas desde Sofía hacia Evolution.
-
-Para ver logs:
-
-```bash
-docker compose logs -f vanessa-app evolution-api
-```
-
-En Coolify los contenedores tienen nombres generados. Para ubicar la app:
+Validación rápida de OpenAI dentro del contenedor:
 
 ```bash
 APP=$(docker ps --filter "ancestor=marcogll/vanessa-bot-vanity:latest" --format "{{.Names}}" | head -n1)
-echo "$APP"
-docker logs -f "$APP"
-```
-
-## Verificación OpenAI En Producción
-
-Después de crear o actualizar variables en Coolify, valida que el contenedor tenga
-la llave completa y pueda llamar a OpenAI:
-
-```bash
-APP=$(docker ps --filter "ancestor=marcogll/vanessa-bot-vanity:latest" --format "{{.Names}}" | head -n1)
-
 docker exec "$APP" python -c 'from app.config import get_settings; from openai import OpenAI; s=get_settings(); print("model:", s.llm_model); print("key_prefix:", s.openai_api_key[:7]); print("key_len:", len(s.openai_api_key)); r=OpenAI(api_key=s.openai_api_key).chat.completions.create(model=s.llm_model, messages=[{"role":"user","content":"Responde solo OK"}], max_tokens=5); print("reply:", r.choices[0].message.content)'
 ```
 
-Resultado esperado:
+## Documentos clave
+
+- [PRD.md](/home/marco/Work/code/bot_vanity/PRD.md)
+- [TASKS.md](/home/marco/Work/code/bot_vanity/TASKS.md)
+- [CHANGELOG.md](/home/marco/Work/code/bot_vanity/CHANGELOG.md)
+- [docs/evolution_api_latency_guide.md](/home/marco/Work/code/bot_vanity/docs/evolution_api_latency_guide.md)
+
+## Estado de pruebas
+
+Suite focalizada actual:
 
 ```text
-model: gpt-4o
-key_prefix: sk-proj
-key_len: <mucho mayor que 8>
-reply: OK
+64 passed
 ```
-
-Si `key_len` es `8` y el error dice `Incorrect API key provided: sk-proj-`,
-la variable `OPENAI_API_KEY` está incompleta en Coolify. Corrige la variable,
-redeploya y repite la prueba.
-
-Para confirmar que la imagen tiene el código reciente:
-
-```bash
-docker exec "$APP" python -c 'import inspect, app.main as m; print("has_local_recovery:", hasattr(m, "_local_recovery_reply")); print("image_high:", "\"detail\": \"high\"" in inspect.getsource(m._build_user_content)); print("greeting:", m.INITIAL_GREETING_REPLY)'
-```
-
-## Comando De Borrado Global
-
-`dipiridú` es un comando administrativo raro a propósito. Cuando Sofía recibe
-exactamente esa palabra, pide confirmación. Si se responde `sí`, borra solo la
-memoria e historial del chat actual:
-
-- filas de `interacciones` de ese `whatsapp_id`;
-- fila de `sesiones_memoria` de ese `whatsapp_id`;
-- registros relacionados en `citas_pendientes` y `citas_completadas`.
-
-La confirmación existe para evitar borrados accidentales.
-
-Solo el número configurado en `ADMIN_PHONE_NUMBER` puede iniciar o confirmar este
-comando. Usa el número en formato dígitos, sin `+`, espacios ni guiones.
-
-```env
-ADMIN_PHONE_NUMBER=5218440000000
-```
-
-## Audios De WhatsApp
-
-Si Evolution envía audio con `base64`, Sofía lo transcribe antes de procesarlo.
-La transcripción se convierte en el mensaje del usuario y sigue el mismo flujo de
-knowledge base, promociones, precios y agendamiento.
-
-Modelo por defecto:
-
-```env
-AUDIO_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
-```
-
-Evolution debe mantener habilitado `WEBHOOK_GLOBAL_WEBHOOK_BASE64=true` para que
-los audios lleguen con contenido transcribible.
-
-## Tracking De Citas
-
-Sofía mantiene dos tablas operativas para seguimiento de reservas:
-
-- `citas_pendientes`: se crea cuando la clienta envía una captura/comprobante de cita después de recibir la liga de agendamiento.
-- `citas_completadas`: se crea cuando, existiendo una pendiente, la clienta envía después el comprobante de pago/anticipo.
-
-Cuando una cita pasa a completada, se elimina de `citas_pendientes`. La tabla
-`citas_pendientes` se purga con `MEMORY_RETENTION_DAYS`; `citas_completadas`
-no se borra automáticamente por tiempo.
-
-## Webhook de Evolution
-
-Cuando Evolution corre en el mismo `docker-compose.yml`, usa la URL interna:
-
-```text
-http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET>
-```
-
-El backend acepta tanto `/webhook` como `/webhook/messages-upsert`, y responde `duplicate` si Evolution reenvía el mismo `key.id`.

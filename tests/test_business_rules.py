@@ -2,16 +2,21 @@ from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
     BookingAnalysis,
+    BOOKING_CONVERSATION_CONTEXT_HOURS,
+    DEFAULT_CONVERSATION_CONTEXT_HOURS,
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
     MANUAL_TEAM_INTERVENTION_MARKER,
     MEMORY_DELETE_CONFIRMATION_REPLY,
     PaymentAnalysis,
     _appointment_confirmation_reply,
+    _build_test_session_export_payload,
     _build_user_content,
     _booking_proof_message,
     _clear_memory_delete_pending,
+    _conversation_context_cutoff,
     _derive_conversation_state,
+    _has_extended_booking_context,
     _has_recent_manual_team_intervention,
     _remember_recent_outbound_signature,
     _consume_recent_outbound_signature,
@@ -19,16 +24,19 @@ from app.main import (
     _handle_memory_delete_confirmation,
     _audio_filename_from_mimetype,
     _is_audio_payload,
+    _is_test_mode_allowed_number,
     _is_authorized_admin,
     _is_cancellation,
     _is_confirmation,
     _is_memory_delete_trigger,
+    _parse_test_mode_allowed_numbers,
     _mark_memory_delete_pending,
     _media_prompt_hint,
     _payment_confirmation_reply,
     _format_whatsapp_reply,
     _is_visual_reference_request,
     _strip_data_url_prefix,
+    _sanitize_assistant_reply_for_user,
     _sanitize_history_content_for_model,
     _looks_like_appointment_confirmation_context,
     _looks_like_booking_or_payment_artifact,
@@ -42,6 +50,7 @@ from app.main import (
     _should_schedule_booking_follow_up,
     _should_send_booking_follow_up,
     _should_send_initial_greeting,
+    _should_handle_in_test_mode,
     _technical_fallback_reply,
     _webhook_dedupe_key,
 )
@@ -60,6 +69,33 @@ def test_webhook_secret_allows_event_suffix() -> None:
     assert not _matches_webhook_secret("secret-extra/messages-upsert", "secret")
 
 
+def test_parse_test_mode_allowed_numbers_normalizes_digits() -> None:
+    numbers = _parse_test_mode_allowed_numbers("+52 844 111 2233, 5218112345678\n844-555-9999")
+
+    assert numbers == {"528441112233", "5218112345678", "8445559999"}
+
+
+def test_is_test_mode_allowed_number_matches_remote_jid() -> None:
+    settings = type("Settings", (), {"test_mode_allowed_numbers": "5218441112233,5218112345678"})()
+
+    assert _is_test_mode_allowed_number("5218441112233@s.whatsapp.net", settings)
+    assert not _is_test_mode_allowed_number("5218449990000@s.whatsapp.net", settings)
+
+
+def test_should_handle_in_test_mode_allows_admin_even_if_not_allowlisted() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "test_mode_allowed_numbers": "5218112345678",
+            "admin_phone_number": "5218441112233",
+        },
+    )()
+    payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="hola")
+
+    assert _should_handle_in_test_mode(payload, settings)
+
+
 def test_human_handover_marker_is_detected() -> None:
     assert needs_human_handover("Quiero hablar con una persona por una queja")
     assert not needs_human_handover("Soy una persona que quiere uñas")
@@ -74,18 +110,31 @@ def test_pricing_estimate_adds_base_retiro_and_nail_art() -> None:
 
 
 def test_memory_delete_trigger_is_exact_command() -> None:
-    assert _is_memory_delete_trigger(" dipiridú ")
-    assert not _is_memory_delete_trigger("quiero dipiridú")
+    settings = type("Settings", (), {"memory_delete_trigger": "dipiridú"})()
+
+    assert _is_memory_delete_trigger(" dipiridú ", settings)
+    assert not _is_memory_delete_trigger("quiero dipiridú", settings)
     assert "este chat" in MEMORY_DELETE_CONFIRMATION_REPLY
 
 
 def test_memory_delete_admin_authorization_uses_configured_phone() -> None:
-    settings = type("Settings", (), {"admin_phone_number": "5218446686100"})()
+    settings = type("Settings", (), {"admin_phone_number": "5218446686100", "admin_phone_numbers": ""})()
     authorized = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="dipiridú")
     unauthorized = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="dipiridú")
 
     assert _is_authorized_admin(authorized, settings)
     assert not _is_authorized_admin(unauthorized, settings)
+
+
+def test_memory_delete_admin_authorization_allows_multiple_configured_admins() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {"admin_phone_number": "5218446686100", "admin_phone_numbers": "5218441026472,5218445047771"},
+    )()
+    authorized = EvolutionWebhookPayload(remoteJid="5218445047771@s.whatsapp.net", message="dipiridú")
+
+    assert _is_authorized_admin(authorized, settings)
 
 
 def test_memory_delete_confirmation_words() -> None:
@@ -407,12 +456,12 @@ def test_webhook_dedupe_key_uses_instance_chat_and_message_id() -> None:
     assert _webhook_dedupe_key(payload) == "sofia:5218441026472@s.whatsapp.net:ABC123"
 
 
-def test_initial_greeting_is_used_only_without_history_or_memory() -> None:
+def test_initial_greeting_is_used_only_without_recent_history() -> None:
     empty_memory = type("Memory", (), {"resumen_perfil": None})()
     existing_memory = type("Memory", (), {"resumen_perfil": "Cliente inició conversación con Sofía."})()
 
     assert _should_send_initial_greeting([], empty_memory)
-    assert not _should_send_initial_greeting([], existing_memory)
+    assert _should_send_initial_greeting([], existing_memory)
     assert "Soy Sofía" in INITIAL_GREETING_REPLY
     assert "nombre" in INITIAL_GREETING_REPLY
     assert "servicio" not in INITIAL_GREETING_REPLY
@@ -549,6 +598,48 @@ def test_derive_conversation_state_detects_high_context() -> None:
     assert _derive_conversation_state(payload, [], memory, None, None, settings) == "high_context"
 
 
+def test_derive_conversation_state_ignores_stale_service_interest_without_history() -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218446686100@s.whatsapp.net",
+        message="Hola",
+    )
+    memory = type("Memory", (), {"servicio_interes": "Uñas"})()
+    settings = type("Settings", (), {"booking_url": "https://booking.example"})()
+
+    assert _derive_conversation_state(payload, [], memory, None, None, settings) == "new"
+
+
+def test_conversation_context_cutoff_defaults_to_24_hours() -> None:
+    import datetime as dt
+
+    now = dt.datetime(2026, 5, 1, 18, 0, tzinfo=dt.UTC)
+
+    cutoff = _conversation_context_cutoff(now, None, None)
+
+    assert cutoff == now - dt.timedelta(hours=DEFAULT_CONVERSATION_CONTEXT_HOURS)
+
+
+def test_conversation_context_cutoff_extends_to_48_hours_for_recent_booking() -> None:
+    import datetime as dt
+
+    now = dt.datetime(2026, 5, 1, 18, 0, tzinfo=dt.UTC)
+    completed = type(
+        "Completed",
+        (),
+        {
+            "appointment_date": "2026-05-02",
+            "start_time": "3:30 p. m.",
+            "end_time": "4:30 p. m.",
+            "completed_at": now,
+        },
+    )()
+
+    cutoff = _conversation_context_cutoff(now, None, completed)
+
+    assert cutoff == now - dt.timedelta(hours=BOOKING_CONVERSATION_CONTEXT_HOURS)
+    assert _has_extended_booking_context(now, None, completed)
+
+
 def test_recent_outbound_signature_can_be_consumed_once() -> None:
     _remember_recent_outbound_signature("5218446686100@s.whatsapp.net", "Hola hermosa")
 
@@ -566,6 +657,93 @@ def test_detects_recent_manual_team_intervention() -> None:
     ]
 
     assert _has_recent_manual_team_intervention(history)
+
+
+def test_sanitize_assistant_reply_removes_internal_marker_lines() -> None:
+    reply = (
+        f"{MANUAL_TEAM_INTERVENTION_MARKER}\n"
+        "Recepción humana ya intervino. No retomes la conversación.\n"
+        "Cuéntame qué servicio buscas."
+    )
+
+    sanitized = _sanitize_assistant_reply_for_user(reply)
+
+    assert MANUAL_TEAM_INTERVENTION_MARKER not in sanitized
+    assert "Recepción humana ya intervino" not in sanitized
+    assert "Cuéntame qué servicio buscas." in sanitized
+
+
+def test_sanitize_assistant_reply_falls_back_when_only_internal_lines_exist() -> None:
+    reply = (
+        f"{MANUAL_TEAM_INTERVENTION_MARKER}\n"
+        "Recepción humana ya intervino. No retomes la conversación."
+    )
+
+    sanitized = _sanitize_assistant_reply_for_user(reply)
+
+    assert "¿en qué te puedo ayudar hoy" in sanitized
+
+
+def test_build_test_session_export_payload_includes_history_and_booking_data() -> None:
+    import datetime as dt
+
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "timestamp": dt.datetime(2026, 5, 1, 10, 0, tzinfo=dt.UTC),
+                "role": MessageRole.user,
+                "content": "Hola",
+            },
+        )(),
+        type(
+            "Interaction",
+            (),
+            {
+                "timestamp": dt.datetime(2026, 5, 1, 10, 1, tzinfo=dt.UTC),
+                "role": MessageRole.assistant,
+                "content": "¡Hola! Soy Sofía.",
+            },
+        )(),
+    ]
+    memory = type(
+        "Memory",
+        (),
+        {"push_name": "Marco", "resumen_perfil": "Cliente de prueba", "servicio_interes": "Uñas"},
+    )()
+    pending = type(
+        "Pending",
+        (),
+        {
+            "push_name": "Marco",
+            "servicio_interes": "Uñas",
+            "appointment_proof_message": "captura",
+            "booking_data": "{\"ok\":true}",
+            "booking_status": "booked",
+            "deposit_status": "pending",
+            "appointment_proof_received_at": dt.datetime(2026, 5, 1, 10, 2, tzinfo=dt.UTC),
+            "updated_at": dt.datetime(2026, 5, 1, 10, 3, tzinfo=dt.UTC),
+        },
+    )()
+
+    payload = _build_test_session_export_payload(
+        whatsapp_id="5218441112233@s.whatsapp.net",
+        history=history,
+        memory=memory,
+        pending=pending,
+        completed=None,
+    )
+
+    assert payload["mode"] == "test"
+    assert payload["whatsapp_id"] == "5218441112233@s.whatsapp.net"
+    assert payload["phone_number"] == "5218441112233"
+    assert payload["push_name"] == "Marco"
+    assert payload["history"][0]["content"] == "Hola"
+    assert "timestamp_local" in payload["history"][0]
+    assert payload["history"][1]["role"] == "assistant"
+    assert payload["pending_booking"]["booking_status"] == "booked"
+    assert payload["pending_booking"]["booking_data"]["ok"] is True
 
 
 def test_sanitize_history_replaces_manual_team_content_for_model() -> None:

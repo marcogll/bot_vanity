@@ -27,10 +27,18 @@ class Settings(BaseSettings):
     memory_retention_days: int = 30
     webhook_secret: str = Field(..., min_length=1)
     admin_phone_number: str = ""
+    admin_phone_numbers: str = ""
+    memory_delete_trigger: str = "dipiridú"
     rate_limit_max_requests: int = 20
     rate_limit_window_seconds: int = 60
     follow_up_delay_seconds: int = 600
     janitor_interval_seconds: int = 86_400
+    test_mode_enabled: bool = False
+    test_mode_allowed_numbers: str = ""
+    test_mode_export_webhook_url: str = ""
+    test_mode_export_webhook_auth_header: str = "Authorization"
+    test_mode_export_webhook_auth_value: str = ""
+    test_mode_session_minutes: int = 15
 
     booking_url: str = "https://vanitynails.fresh.com"
     ios_app_store_url: str = "https://apps.apple.com/app/id1297230801"
