@@ -26,9 +26,13 @@ from app.main import (
     _is_audio_payload,
     _is_test_mode_allowed_number,
     _is_authorized_admin,
+    _bot_is_paused,
+    _clear_bot_paused,
     _is_cancellation,
     _is_confirmation,
     _is_memory_delete_trigger,
+    _mark_bot_paused,
+    _pause_command_action,
     _parse_test_mode_allowed_numbers,
     _mark_memory_delete_pending,
     _media_prompt_hint,
@@ -142,6 +146,24 @@ def test_memory_delete_confirmation_words() -> None:
     assert _is_confirmation("SI")
     assert _is_cancellation("no")
     assert _is_cancellation("cancelar")
+
+
+def test_pause_command_variants_are_detected() -> None:
+    assert _pause_command_action("serac") == "pause"
+    assert _pause_command_action("/serac") == "pause"
+    assert _pause_command_action("SERAC pausa") == "pause"
+    assert _pause_command_action("serac -r") == "resume"
+    assert _pause_command_action("serac resume") == "resume"
+    assert _pause_command_action("serac reanudar") == "resume"
+    assert _pause_command_action("hola serac") is None
+
+
+def test_bot_paused_marker_roundtrip() -> None:
+    summary = _mark_bot_paused("Interés detectado: Uñas")
+
+    assert summary.startswith("__bot_paused__")
+    assert _bot_is_paused(type("Memory", (), {"resumen_perfil": summary})())
+    assert _clear_bot_paused(summary) == "Interés detectado: Uñas"
 
 
 def test_memory_delete_confirmation_deletes_all_memory() -> None:

@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import re
+import unicodedata
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -33,6 +34,7 @@ logger = logging.getLogger("vanessa")
 app = FastAPI(title="Sofía Bot Vanity", version="0.1.0")
 rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
+BOT_PAUSED_MARKER = "__bot_paused__"
 MEMORY_DELETE_CONFIRMATION_REPLY = (
     "¿Confirmas que deseas borrar la memoria e historial de este chat en Sofía? "
     "Responde sí para borrar este chat o no para cancelar."
@@ -513,6 +515,7 @@ async def _handle_webhook_payload(
 
     memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
     pending_delete = _memory_delete_is_pending(memory)
+    pause_command = _pause_command_action(payload.message)
 
     if _is_memory_delete_trigger(payload.message, settings):
         if not _is_authorized_admin(payload, settings):
@@ -544,6 +547,24 @@ async def _handle_webhook_payload(
         await _send_reply(payload, response_text)
         _schedule_test_session_export(payload.remote_jid, settings)
         logger.info("Memory delete confirmation handled for %s", payload.remote_jid)
+        return
+
+    if pause_command is not None:
+        if not _is_authorized_admin(payload, settings):
+            reply = "No puedo ejecutar ese comando administrativo desde este número."
+            await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
+            _schedule_test_session_export(payload.remote_jid, settings)
+            await _send_reply(payload, reply)
+            logger.warning("Unauthorized pause command from %s", payload.remote_jid)
+            return
+        response_text = await _handle_pause_command(db, memory, payload, pause_command)
+        _schedule_test_session_export(payload.remote_jid, settings)
+        await _send_reply(payload, response_text)
+        logger.info("Pause command %s handled for %s", pause_command, payload.remote_jid)
+        return
+
+    if _bot_is_paused(memory):
+        logger.info("Bot paused for %s; ignoring inbound message", payload.remote_jid)
         return
 
     if _is_sender_debug_command(payload.message):
@@ -2111,6 +2132,39 @@ def _clear_memory_delete_pending(summary: str | None) -> str | None:
     return restored or None
 
 
+def _normalize_admin_command(message: str) -> str:
+    normalized = unicodedata.normalize("NFKD", message.casefold())
+    normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    normalized = normalized.replace("/", " ")
+    return " ".join(normalized.split())
+
+
+def _pause_command_action(message: str) -> str | None:
+    normalized = _normalize_admin_command(message)
+    if normalized in {"serac", "serac -s", "serac stop", "serac pausa", "serac pause"}:
+        return "pause"
+    if normalized in {"serac -r", "serac r", "serac resume", "serac restart", "serac reanudar"}:
+        return "resume"
+    return None
+
+
+def _bot_is_paused(memory: SesionMemoria) -> bool:
+    return (memory.resumen_perfil or "").startswith(BOT_PAUSED_MARKER)
+
+
+def _mark_bot_paused(summary: str | None) -> str:
+    if summary and summary.startswith(BOT_PAUSED_MARKER):
+        return summary
+    return f"{BOT_PAUSED_MARKER}\n{summary or ''}"
+
+
+def _clear_bot_paused(summary: str | None) -> str | None:
+    if not summary or not summary.startswith(BOT_PAUSED_MARKER):
+        return summary
+    restored = summary.removeprefix(BOT_PAUSED_MARKER).lstrip()
+    return restored or None
+
+
 def _is_confirmation(message: str) -> bool:
     normalized = message.strip().casefold()
     return normalized in {"si", "sí", "confirmo", "confirmar", "borrar", "eliminar"}
@@ -2143,6 +2197,24 @@ async def _handle_memory_delete_confirmation(
         return reply
 
     reply = MEMORY_DELETE_CONFIRMATION_REPLY
+    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+    await db.commit()
+    return reply
+
+
+async def _handle_pause_command(
+    db: AsyncSession,
+    memory: SesionMemoria,
+    payload: EvolutionWebhookPayload,
+    action: str,
+) -> str:
+    memory.push_name = payload.push_name or memory.push_name
+    if action == "pause":
+        memory.resumen_perfil = _mark_bot_paused(memory.resumen_perfil)
+        reply = "Bot pausado para este chat. Sofía dejará de responder hasta recibir `serac -r`."
+    else:
+        memory.resumen_perfil = _clear_bot_paused(memory.resumen_perfil)
+        reply = "Bot reactivado para este chat. Sofía puede volver a responder."
     await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
     await db.commit()
     return reply
