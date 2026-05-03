@@ -1248,6 +1248,12 @@ def _extract_name_only(message: str) -> str | None:
         return None
 
     cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
+    cleaned = re.split(
+        r"\s+(?:es\s+para|para)\s+(?:mi\s+)?(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
+        cleaned,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip(" ,.-")
     words = cleaned.split()
     if not 1 <= len(words) <= 4:
         return None

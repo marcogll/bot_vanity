@@ -49,6 +49,7 @@ from app.main import (
     _name_only_followup_reply,
     _nail_options_followup_reply,
     _normalized_whatsapp_digits,
+    _extract_name_only,
     _reply_target,
     _send_reply,
     _service_only_followup_reply,
@@ -188,6 +189,10 @@ def test_pause_command_variants_are_detected() -> None:
     assert _pause_command_action("serac resume") == "resume"
     assert _pause_command_action("serac reanudar") == "resume"
     assert _pause_command_action("hola serac") is None
+
+
+def test_extract_name_only_allows_relationship_suffix() -> None:
+    assert _extract_name_only("Marco Gallegos es para mi esposa") == "Marco Gallegos"
 
 
 def test_bot_paused_marker_roundtrip() -> None:
