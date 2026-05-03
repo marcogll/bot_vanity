@@ -31,6 +31,7 @@ from app.security import looks_like_prompt_injection, validate_webhook_api_key
 
 
 logger = logging.getLogger("vanessa")
+logger.setLevel(logging.INFO)
 app = FastAPI(title="Sofía Bot Vanity", version="0.1.0")
 rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
@@ -77,6 +78,33 @@ class EvolutionWebhookPayload(BaseModel):
             return value
         if "remoteJid" in value and "message" in value:
             return value
+
+        top_level_key = value.get("key")
+        top_level_message = value.get("message")
+        if isinstance(top_level_key, dict) and top_level_message is not None:
+            remote_jid = top_level_key.get("remoteJid") or value.get("remoteJid") or ""
+            sender = value.get("sender") or value.get("participant") or top_level_key.get("participant")
+            if not sender and isinstance(remote_jid, str) and "@lid" in remote_jid:
+                sender = _find_reply_identifier(value, remote_jid)
+            media = _extract_media_metadata(top_level_message, value)
+            return {
+                "remoteJid": remote_jid,
+                "sender": sender,
+                "replyCandidates": _find_reply_identifiers(value, remote_jid),
+                "replyDiagnostics": _find_reply_identifier_diagnostics(value),
+                "pushName": value.get("pushName"),
+                "instanceName": value.get("instance") or value.get("instanceName"),
+                "serverUrl": value.get("server_url") or value.get("serverUrl"),
+                "apiKey": value.get("apikey") or value.get("apiKey"),
+                "message": _extract_message_text(top_level_message, value),
+                "messageType": value.get("messageType") or media["message_type"],
+                "mediaMimetype": media["mimetype"],
+                "mediaFilename": media["filename"],
+                "mediaBase64": media["base64"],
+                "hasMedia": media["has_media"],
+                "sessionId": top_level_key.get("id") or value.get("id"),
+                "fromMe": bool(top_level_key.get("fromMe", False)),
+            }
 
         data = value.get("data")
         if not isinstance(data, dict):
@@ -350,6 +378,12 @@ def _schedule_test_session_export(whatsapp_id: str, settings: Settings) -> None:
     )
     app.state.test_session_tasks.add(task)
     task.add_done_callback(app.state.test_session_tasks.discard)
+    logger.info(
+        "Test session export scheduled: remote_jid=%s delay_seconds=%s webhook_configured=%s",
+        whatsapp_id,
+        delay_seconds,
+        bool(settings.test_mode_export_webhook_url.strip()),
+    )
 
 
 async def _export_test_session_if_idle(
@@ -611,12 +645,20 @@ async def _handle_webhook_payload(
     completed = await _get_completed_booking(db, payload.remote_jid)
     history = await _get_contextual_history(db, payload.remote_jid, pending, completed)
     conversation_state = _derive_conversation_state(payload, history, memory, None, None, settings)
-    logger.info("Conversation state for %s: %s", payload.remote_jid, conversation_state)
+    logger.info(
+        "Conversation state: remote_jid=%s state=%s paused=%s pending=%s completed=%s test_mode=%s",
+        payload.remote_jid,
+        conversation_state,
+        _bot_is_paused(memory),
+        pending is not None,
+        completed is not None,
+        settings.test_mode_enabled,
+    )
     if _should_send_initial_greeting(history, memory, payload):
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY)
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, INITIAL_GREETING_REPLY)
-        logger.info("Initial greeting sent to %s", payload.remote_jid)
+        logger.info("Reply sent: remote_jid=%s flow=initial_greeting", payload.remote_jid)
         return
 
     name_only_reply = _name_only_followup_reply(payload.message, history)
@@ -624,7 +666,7 @@ async def _handle_webhook_payload(
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply)
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, name_only_reply)
-        logger.info("Name-only reply handled without LLM for %s", payload.remote_jid)
+        logger.info("Reply sent: remote_jid=%s flow=name_followup_without_llm", payload.remote_jid)
         return
 
     db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
@@ -640,7 +682,7 @@ async def _handle_webhook_payload(
         await db.commit()
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, structured_booking_reply)
-        logger.info("Structured booking reply generated for %s", payload.remote_jid)
+        logger.info("Reply sent: remote_jid=%s flow=structured_booking", payload.remote_jid)
         return
 
     response_text = _sanitize_assistant_reply_for_user(
@@ -660,7 +702,7 @@ async def _handle_webhook_payload(
         _schedule_follow_up(payload.remote_jid, settings.follow_up_delay_seconds)
 
     await _send_reply(payload, response_text)
-    logger.info("Response generated for %s", payload.remote_jid)
+    logger.info("Reply sent: remote_jid=%s flow=llm state=%s", payload.remote_jid, conversation_state)
 
 
 async def _ask_vanessa(

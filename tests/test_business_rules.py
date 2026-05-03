@@ -460,6 +460,37 @@ def test_evolution_messages_upsert_payload_is_flattened() -> None:
     assert not payload.from_me
 
 
+def test_evolution_top_level_payload_is_flattened() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "key": {
+                "remoteJid": "5218441026472@s.whatsapp.net",
+                "remoteJidAlt": "5218441026472@s.whatsapp.net",
+                "fromMe": False,
+                "id": "AC6884956D71C81F8B2ED2FBE56EE874",
+                "participant": "",
+                "addressingMode": "lid",
+            },
+            "pushName": "MG",
+            "status": "DELIVERY_ACK",
+            "message": {
+                "conversation": "Hola buenos días",
+            },
+            "messageType": "conversation",
+            "messageTimestamp": 1777823535,
+            "instanceId": "74f6827a-6ec6-4ad5-9994-af1289eaf780",
+            "source": "android",
+        }
+    )
+
+    assert payload.remote_jid == "5218441026472@s.whatsapp.net"
+    assert payload.push_name == "MG"
+    assert payload.message == "Hola buenos días"
+    assert payload.message_type == "conversation"
+    assert payload.session_id == "AC6884956D71C81F8B2ED2FBE56EE874"
+    assert not payload.from_me
+
+
 def test_webhook_dedupe_key_uses_instance_chat_and_message_id() -> None:
     payload = EvolutionWebhookPayload.model_validate(
         {
