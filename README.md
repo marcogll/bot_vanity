@@ -218,6 +218,149 @@ Logs:
 docker compose logs -f vanessa-app evolution-api
 ```
 
+## Configuración de webhook en Evolution
+
+El webhook de Evolution debe apuntar al dominio de `vanessa-app`, no al dominio de `evolution-api`.
+
+Con una app publicada en Coolify, la forma correcta es:
+
+```text
+https://<dominio-vanessa-app>/webhook?apiKey=<WEBHOOK_SECRET_REAL>
+```
+
+Ejemplo:
+
+```text
+https://y1gwctkjhcv59yt3d7encn7z.soul23.cloud/webhook?apiKey=tu_secret_real
+```
+
+También se acepta:
+
+```text
+https://<dominio-vanessa-app>/webhook/messages-upsert?apiKey=<WEBHOOK_SECRET_REAL>
+```
+
+Notas:
+
+- `<WEBHOOK_SECRET_REAL>` es el valor literal de `WEBHOOK_SECRET`, sin `< >`
+- el dominio de `evolution-api` no va aquí
+- `WEBHOOK_SECRET` y el `apiKey` configurado en Evolution deben coincidir exactamente
+
+## Pruebas CLI
+
+Hay dos pruebas distintas: envío directo por Evolution y prueba del webhook de Sofía.
+
+### 1. Envío directo por Evolution
+
+Esto manda un WhatsApp saliente y valida que la instancia de Evolution existe y puede enviar.
+
+```bash
+curl -X POST "https://<dominio-evolution>/message/sendText/<instance_name>" \
+  -H "apikey: <EVOLUTION_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "number": "528441026472",
+    "text": "Prueba CLI desde Evolution"
+  }'
+```
+
+Ejemplo real:
+
+```bash
+curl -X POST "https://ed3tlhtejal71x0be1zgjkkr.soul23.cloud/message/sendText/sofia_prod" \
+  -H "apikey: qiY8h1TlRYxFoXzQ9rOoWd" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "number": "528441026472",
+    "text": "Prueba CLI desde Evolution"
+  }'
+```
+
+Si responde:
+
+```json
+{"status":"PENDING", ...}
+```
+
+entonces la instancia existe y aceptó el envío.
+
+Si responde:
+
+```json
+{"status":404,"error":"Not Found","response":{"message":["The \"sofia\" instance does not exist"]}}
+```
+
+entonces el nombre de instancia es incorrecto.
+
+### 2. Prueba del webhook de Sofía
+
+Esto simula un mensaje entrante como si Evolution lo enviara al backend.
+
+```bash
+curl -X POST "https://<dominio-vanessa-app>/webhook?apiKey=<WEBHOOK_SECRET_REAL>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "messages.upsert",
+    "instance": "<instance_name>",
+    "data": {
+      "key": {
+        "remoteJid": "5218441026472@s.whatsapp.net",
+        "fromMe": false,
+        "id": "cli-test-001"
+      },
+      "pushName": "Marco Test",
+      "message": {
+        "conversation": "Hola, esta es una prueba del webhook"
+      }
+    }
+  }'
+```
+
+Esperado:
+
+- respuesta HTTP con `{"message":"accepted"}` o `{"message":"duplicate"}`
+- Sofía intentará responder por WhatsApp a través de Evolution
+
+### 3. End-to-end con `.env.production`
+
+Si ya tienes `.env.production` correcto:
+
+```bash
+source .env.production
+
+curl -X POST "${EVOLUTION_SERVER_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME}" \
+  -H "apikey: ${EVOLUTION_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "number": "528441026472",
+    "text": "Prueba CLI desde Evolution"
+  }'
+```
+
+Y para probar el webhook:
+
+```bash
+source .env.production
+
+curl -X POST "${SERVICE_URL_VANESSA_APP}/webhook?apiKey=${WEBHOOK_SECRET}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "messages.upsert",
+    "instance": "sofia_prod",
+    "data": {
+      "key": {
+        "remoteJid": "5218441026472@s.whatsapp.net",
+        "fromMe": false,
+        "id": "cli-test-002"
+      },
+      "pushName": "Marco Test",
+      "message": {
+        "conversation": "Hola, prueba end to end"
+      }
+    }
+  }'
+```
+
 ## Verificación de producción
 
 Healthcheck:
