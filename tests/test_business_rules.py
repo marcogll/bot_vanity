@@ -298,8 +298,8 @@ def test_nail_subservice_followup_separates_retiro_from_narrowing() -> None:
     reply = _nail_subservice_followup_reply("Uñas y pedicure", history)
 
     assert reply is not None
-    assert "retiro, se cotiza aparte" in reply
-    assert "sencillo o más completo" in reply
+    assert "requiere retiro de algún producto" in reply
+    assert "_Gel, acrílico, polygel, etc._" in reply
 
 
 def test_bot_paused_marker_roundtrip() -> None:

@@ -1245,12 +1245,12 @@ def _nail_subservice_followup_reply(message: str, history: list[Interaccion]) ->
         return None
     if subtype in {"Pedicure", "Manicure", "Combo manos y pies"}:
         return (
-            "Perfecto 💗 Si trae retiro, se cotiza aparte cuando aplica. "
-            "Para recomendarte la mejor opción, ¿lo busca algo sencillo o más completo?"
+            "Perfecto 💗 Para orientarte mejor, ¿requiere retiro de algún producto? "
+            "_Gel, acrílico, polygel, etc._"
         )
     return (
-        "Perfecto 💗 Si trae retiro, se cotiza aparte cuando aplica. "
-        "¿Lo busca en tono liso o con diseño?"
+        "Perfecto 💗 Para orientarte mejor, ¿requiere retiro de algún producto? "
+        "_Gel, acrílico, polygel, etc._"
     )
 
 
