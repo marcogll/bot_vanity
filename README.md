@@ -1,33 +1,29 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://soul23.mx/logo/s23_logo_wh.png">
-    <img src="https://soul23.mx/logo/s23_logo_blk.png" alt="Soul23" width="110">
-  </picture>
+<div align="center">
+
+<img src="https://soul23.mx/logo/soul23_logo.svg" width="90" alt="Soul23">
+
+# Bot Vanity
+
+Automated Telegram bot for social media operations 🤖
+
+<p>
+    <img src="https://img.shields.io/badge/Docker-111111?style=flat-square&logo=docker&logoColor=white" alt="Docker">
+  <img src="https://img.shields.io/badge/FastAPI-111111?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/OpenAI-111111?style=flat-square&logo=openai&logoColor=white" alt="OpenAI">
+  <img src="https://img.shields.io/badge/PostgreSQL-111111?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
+  <img src="https://img.shields.io/badge/Python-111111?style=flat-square&logo=python&logoColor=white" alt="Python">
+
 </p>
+
+</div>
+
+---
 
 <h1 align="center">bot_vanity.git</h1>
 
-<p align="center">
-  <p align="center">
-</p>
-
-<p align="center">
-  [![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/marcogll)
-  [![FastAPI](https://img.shields.io/badge/fastapi-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://github.com/marcogll)
-  [![OpenAI](https://img.shields.io/badge/openai-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/marcogll)
-  [![PostgreSQL](https://img.shields.io/badge/postgresql-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/marcogll)
-  [![Python](https://img.shields.io/badge/python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/marcogll)
-</p>
 
 
-<p align="center">
-  <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-111111?style=flat-square&logo=python&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/FastAPI-async-111111?style=flat-square&logo=fastapi&logoColor=white">
-  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-15-111111?style=flat-square&logo=postgresql&logoColor=white">
-  <img alt="Evolution API" src="https://img.shields.io/badge/Evolution_API-v2.3.7-111111?style=flat-square">
-  <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-gpt--4o-111111?style=flat-square">
-  <img alt="Mode" src="https://img.shields.io/badge/Test_Mode-supported-111111?style=flat-square">
-</p>
+
 
 ## Resumen
 
@@ -399,3 +395,4 @@ Suite focalizada actual:
 ```text
 64 passed
 ```
+
