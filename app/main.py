@@ -428,7 +428,7 @@ async def _is_rate_limited(whatsapp_id: str, settings: Settings) -> bool:
 def _schedule_test_session_export(whatsapp_id: str, settings: Settings) -> None:
     if not _is_test_mode_enabled(settings):
         return
-    if not _is_test_mode_allowed_number(whatsapp_id, settings):
+    if not _should_export_test_session_for_number(whatsapp_id, settings):
         return
     delay_seconds = max(settings.test_mode_session_minutes, 1) * 60
     task = asyncio.create_task(
@@ -448,6 +448,12 @@ def _schedule_test_session_export(whatsapp_id: str, settings: Settings) -> None:
         delay_seconds,
         bool(settings.test_mode_export_webhook_url.strip()),
     )
+
+
+def _should_export_test_session_for_number(whatsapp_id: str, settings: Settings) -> bool:
+    if _is_test_mode_allowed_number(whatsapp_id, settings):
+        return True
+    return _normalized_whatsapp_digits(whatsapp_id) in _configured_admin_numbers(settings)
 
 
 async def _export_test_session_if_idle(

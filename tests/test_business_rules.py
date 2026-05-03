@@ -59,6 +59,7 @@ from app.main import (
     _should_send_booking_follow_up,
     _should_send_initial_greeting,
     _should_handle_in_test_mode,
+    _should_export_test_session_for_number,
     _is_supported_message_event,
     _technical_fallback_reply,
     _webhook_dedupe_key,
@@ -105,6 +106,25 @@ def test_should_handle_in_test_mode_allows_admin_even_if_not_allowlisted() -> No
     payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="hola")
 
     assert _should_handle_in_test_mode(payload, settings)
+
+
+def test_test_session_export_includes_admin_even_if_not_allowlisted() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "test_mode_enabled": True,
+            "test_mode_allowed_numbers": "528112345678",
+            "admin_phone_number": "528441112233",
+            "admin_phone_numbers": "",
+            "test_mode_session_minutes": 5,
+            "test_mode_export_webhook_url": "https://example.com/webhook",
+            "test_mode_export_webhook_auth_header": "Authorization",
+            "test_mode_export_webhook_auth_value": "Bearer token",
+        },
+    )()
+
+    assert _should_export_test_session_for_number("5218441112233@s.whatsapp.net", settings)
 
 
 def test_human_handover_marker_is_detected() -> None:
