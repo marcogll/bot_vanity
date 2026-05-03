@@ -42,7 +42,7 @@ MEMORY_DELETE_CONFIRMATION_REPLY = (
 )
 INITIAL_GREETING_REPLY = (
     "¡Hola! Soy Sofía, la asistente de Vanity Nail Salon. "
-    "¿Me compartes tu nombre para atenderte mejor?"
+    "¿Me compartes tu nombre para atenderte mejor? Si prefieres, también me puedes mandar audio 💗"
 )
 MAX_PROCESSED_WEBHOOK_IDS = 1000
 MAX_RECENT_OUTBOUND_SIGNATURES = 500

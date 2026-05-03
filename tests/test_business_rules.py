@@ -661,6 +661,7 @@ def test_initial_greeting_is_used_only_without_recent_history() -> None:
     assert _should_send_initial_greeting([], existing_memory)
     assert "Soy Sofía" in INITIAL_GREETING_REPLY
     assert "nombre" in INITIAL_GREETING_REPLY
+    assert "audio" in INITIAL_GREETING_REPLY
     assert "servicio" not in INITIAL_GREETING_REPLY
 
 
