@@ -197,6 +197,7 @@ def test_pause_command_variants_are_detected() -> None:
 def test_extract_name_only_allows_relationship_suffix() -> None:
     assert _extract_name_only("Marco Gallegos es para mi esposa") == "Marco Gallegos"
     assert _extract_name_only("Marco Gallegos es para mí esposa") == "Marco Gallegos"
+    assert _extract_name_only("Marco Gallegos la cita es para mí esposa") == "Marco Gallegos"
 
 
 def test_detect_third_party_target_extracts_relationship() -> None:
@@ -232,6 +233,18 @@ def test_local_recovery_uses_name_only_followup_for_third_party() -> None:
     assert reply is not None
     assert "Gracias, Marco" in reply
     assert "tu esposa" in reply
+
+
+def test_name_only_followup_handles_name_plus_booking_context() -> None:
+    history = [
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.user, "Hola"),
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.assistant, INITIAL_GREETING_REPLY),
+    ]
+
+    reply = _name_only_followup_reply("Marco Gallegos la cita es para mí esposa", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
 
 
 def test_bot_paused_marker_roundtrip() -> None:

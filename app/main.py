@@ -1171,7 +1171,7 @@ def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | Non
 def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str | None:
     if not _last_assistant_requested_name(history):
         return None
-    name = _extract_name_only(message)
+    name = _extract_name_only(message) or _extract_leading_name(message)
     if not name:
         return None
     first_name = name.split()[0]
@@ -1320,7 +1320,20 @@ def _extract_name_only(message: str) -> str | None:
     normalized = message.strip()
     if not normalized:
         return None
-    lowered = normalized.casefold()
+    cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
+    cleaned = re.split(
+        r"\s+(?:la\s+)?(?:cita|servicio)\s+es\s+para\s+(?:mi|mí)\s+(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
+        cleaned,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip(" ,.-")
+    cleaned = re.split(
+        r"\s+(?:es\s+para|para)\s+(?:mi|mí\s+)?\s*(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
+        cleaned,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0].strip(" ,.-")
+    lowered = cleaned.casefold()
     blocked_terms = (
         "hola",
         "buen",
@@ -1346,14 +1359,6 @@ def _extract_name_only(message: str) -> str | None:
     )
     if any(term in lowered for term in blocked_terms):
         return None
-
-    cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
-    cleaned = re.split(
-        r"\s+(?:es\s+para|para)\s+(?:mi|mí\s+)?\s*(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
-        cleaned,
-        maxsplit=1,
-        flags=re.IGNORECASE,
-    )[0].strip(" ,.-")
     words = cleaned.split()
     if not 1 <= len(words) <= 4:
         return None
