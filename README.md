@@ -7,21 +7,15 @@
 </picture>
 </a>
 
+</div>
+
 # Bot Vanity
 
-Automated Telegram bot for social media operations 🤖
+Bot de Telegram para automatización y gestión de operaciones 🤖
 
 <p>
-    <img src="https://img.shields.io/badge/Docker-111111?style=flat-square&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/website-111111?style=flat-square&logo=github&logoColor=white" alt="Website">
-  <img src="https://img.shields.io/badge/FastAPI-111111?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/OpenAI-111111?style=flat-square&logo=openai&logoColor=white" alt="OpenAI">
-  <img src="https://img.shields.io/badge/PostgreSQL-111111?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Python-111111?style=flat-square&logo=python&logoColor=white" alt="Python">
-
+  <img src="https://img.shields.io/badge/español-111111?style=flat-square&logo=googletranslate&logoColor=white" alt="Español">
 </p>
-
-</div>
 
 ---
 
@@ -111,6 +105,7 @@ Variables del panel admin:
 - `ADMIN_WEBUI_ENABLED=true`
 - `ADMIN_BOOTSTRAP_USERNAME=admin`
 - `ADMIN_BOOTSTRAP_PASSWORD=<password fuerte temporal>`
+- `ADMIN_SESSION_SECRET=<secreto largo aleatorio>`
 - `ADMIN_SESSION_MINUTES=120`
 - `ADMIN_LOGIN_MAX_ATTEMPTS=5`
 - `ADMIN_LOCKOUT_MINUTES=15`
@@ -118,6 +113,7 @@ Variables del panel admin:
 Notas:
 
 - `ADMIN_BOOTSTRAP_PASSWORD` solo se usa para sembrar el primer admin si no existe.
+- `ADMIN_SESSION_SECRET` debe ser distinto a `WEBHOOK_SECRET`.
 - el password se guarda hasheado en DB, no reversible
 - en el primer login el panel obliga a rotar ese password temporal
 - idealmente el panel debe ir detrás de `HTTPS` y una capa extra como VPN o allowlist de IP
@@ -452,3 +448,4 @@ Suite focalizada actual:
 ```text
 78 passed
 ```
+

@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     android_play_store_url: str = "https://play.google.com/store/apps/details?id=com.fresha.Fresha"
     payment_url: str = "https://www.paypal.com/ncp/payment/L3AC4D47J3QDN"
     docs_path: str = "docs"
+    admin_webui_enabled: bool = True
+    admin_bootstrap_username: str = "admin"
+    admin_bootstrap_password: str = ""
+    admin_session_cookie_name: str = "sofia_admin_session"
+    admin_session_minutes: int = 120
+    admin_session_secret: str = ""
+    admin_login_max_attempts: int = 5
+    admin_lockout_minutes: int = 15
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -18,6 +18,7 @@ from sqlalchemy import delete, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin import admin_router, bootstrap_admin_user
 from app.business_rules import human_handover_reply, needs_human_handover
 from app.config import Settings, get_settings
 from app.database import AsyncSessionLocal, close_db, init_db
@@ -33,6 +34,7 @@ from app.security import looks_like_prompt_injection, validate_webhook_api_key
 logger = logging.getLogger("vanessa")
 logger.setLevel(logging.INFO)
 app = FastAPI(title="Sofía Bot Vanity", version="0.1.0")
+app.include_router(admin_router)
 rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
 BOT_PAUSED_MARKER = "__bot_paused__"
@@ -191,15 +193,23 @@ async def startup() -> None:
         window_seconds=settings.rate_limit_window_seconds,
     )
     await init_db()
+    await bootstrap_admin_user()
     app.state.janitor_task = asyncio.create_task(
         janitor_loop(settings.janitor_interval_seconds)
     )
+    app.state.rate_limiter = rate_limiter
     app.state.followup_tasks = set()
     app.state.webhook_tasks = set()
     app.state.test_session_tasks = set()
     app.state.processed_webhook_ids = OrderedDict()
     app.state.recent_outbound_signatures = OrderedDict()
     app.state.conversation_buffers = OrderedDict()
+    app.state.admin_runtime = {
+        "bot_paused": False,
+        "followups_paused": False,
+        "last_runtime_reset_at": None,
+        "last_janitor_run_at": None,
+    }
     allowed_test_numbers = _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
     logger.info(
         "Startup config: env=%s test_mode_enabled=%s test_mode_allowed_numbers=%s test_mode_export_webhook_configured=%s evolution_instance=%s",
@@ -671,6 +681,9 @@ async def _handle_webhook_payload(
 
     if _bot_is_paused(memory):
         logger.info("Bot paused for %s; ignoring inbound message", payload.remote_jid)
+        return
+    if _global_bot_is_paused():
+        logger.info("Bot globally paused; ignoring inbound message for %s", payload.remote_jid)
         return
 
     if _is_sender_debug_command(payload.message):
@@ -2386,6 +2399,16 @@ def _bot_is_paused(memory: SesionMemoria) -> bool:
     return (memory.resumen_perfil or "").startswith(BOT_PAUSED_MARKER)
 
 
+def _global_bot_is_paused() -> bool:
+    runtime = getattr(app.state, "admin_runtime", {})
+    return bool(runtime.get("bot_paused"))
+
+
+def _followups_globally_paused() -> bool:
+    runtime = getattr(app.state, "admin_runtime", {})
+    return bool(runtime.get("followups_paused"))
+
+
 def _mark_bot_paused(summary: str | None) -> str:
     if summary and summary.startswith(BOT_PAUSED_MARKER):
         return summary
@@ -2493,6 +2516,9 @@ def _summarize_profile(previous: str | None, user_message: str, assistant_messag
 
 
 def _schedule_follow_up(whatsapp_id: str, delay_seconds: int) -> None:
+    if _followups_globally_paused():
+        logger.info("Skipping follow-up scheduling because follow-ups are globally paused")
+        return
     task = asyncio.create_task(_send_follow_up_if_no_reply(whatsapp_id, delay_seconds))
     app.state.followup_tasks.add(task)
     task.add_done_callback(app.state.followup_tasks.discard)
@@ -2500,6 +2526,9 @@ def _schedule_follow_up(whatsapp_id: str, delay_seconds: int) -> None:
 
 async def _send_follow_up_if_no_reply(whatsapp_id: str, delay_seconds: int) -> None:
     await asyncio.sleep(delay_seconds)
+    if _followups_globally_paused():
+        logger.info("Follow-up aborted because follow-ups are globally paused")
+        return
     async with AsyncSessionLocal() as db:
         pending = await _get_pending_booking(db, whatsapp_id)
         completed = await _get_completed_booking(db, whatsapp_id)

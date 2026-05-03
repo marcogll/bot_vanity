@@ -152,3 +152,27 @@ Implementación guiada por análisis de chats reales, en especial los incidentes
 - Sofía no insiste con Fresha cuando la recepción ya resolvió por chat.
 - Sofía replica un estilo breve, cálido y contextual parecido al de `staff1`, pero conserva un flujo honesto de `redirigir a booking + validar confirmación`.
 - Los incidentes del patrón `24/04/26` quedan cubiertos por pruebas automatizadas.
+
+## Fase 8: Panel Web Administrativo 🔐
+Interfaz interna para controlar catálogo, CRM, vistas crudas de datos y acciones operativas sin exponer la DB directamente.
+
+- [x] Router administrativo `/admin` integrado sobre FastAPI.
+- [x] Login con `user + password`, sesión por cookie `HttpOnly` y expiración.
+- [x] Hash seguro de password con `scrypt` y rotación obligatoria de password temporal.
+- [x] Bloqueo temporal por intentos fallidos de login.
+- [x] Auditoría básica de accesos y acciones administrativas.
+- [x] Dashboard con métricas rápidas y estado operativo.
+- [x] CRUD básico de `service_catalog`.
+- [x] Exportación de catálogo a `CSV` y `JSON`.
+- [x] Importación de catálogo por pegado de `CSV` o `JSON`.
+- [x] Vista CRM cruda con detalle por contacto.
+- [x] Explorador controlado de tablas clave.
+- [x] Acciones operativas: pausa global, pausa de follow-ups, limpieza de runtime y recarga de docs.
+- [x] Acción manual para ejecutar `janitor`.
+- [x] Pruebas unitarias para hashing de password y lectura/escritura de sesión firmada.
+
+**Notas Fase 8:**
+- La UI es server-rendered y prioriza operación interna sobre complejidad frontend.
+- El bootstrap del admin inicial requiere `ADMIN_BOOTSTRAP_PASSWORD` en entorno; la cuenta queda marcada para rotación obligatoria en primer login.
+- La importación de catálogo en v1 se hace pegando el contenido `CSV` o `JSON` en la UI, evitando dependencias extra de upload.
+- La vista DB es intencionalmente de solo lectura en esta versión.
