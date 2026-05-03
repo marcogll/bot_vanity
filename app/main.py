@@ -222,7 +222,6 @@ async def webhook(
     payload: EvolutionWebhookPayload,
     settings: Settings = Depends(get_settings),
 ) -> WebhookResponse:
-    del request
     if payload.from_me:
         if _is_test_mode_enabled(settings) and not _is_test_mode_allowed_number(payload.remote_jid, settings):
             logger.info("Ignoring outbound webhook outside allowlist during test mode for %s", payload.remote_jid)
@@ -234,11 +233,14 @@ async def webhook(
         _schedule_outbound_logging(payload)
         return WebhookResponse(message="logged")
     if not payload.remote_jid or not payload.message.strip():
+        raw_body = (await request.body()).decode("utf-8", errors="replace")
         logger.warning(
-            "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s",
+            "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s normalized_payload=%s raw_body=%s",
             payload.remote_jid,
             payload.message_type,
             payload.has_media,
+            payload.model_dump(),
+            raw_body[:4000],
         )
         return WebhookResponse(message="ignored")
     if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
