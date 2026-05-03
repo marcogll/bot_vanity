@@ -46,6 +46,7 @@ INITIAL_GREETING_REPLY = (
 )
 MAX_PROCESSED_WEBHOOK_IDS = 1000
 MAX_RECENT_OUTBOUND_SIGNATURES = 500
+MAX_CONVERSATION_BUFFERS = 1000
 MANUAL_TEAM_INTERVENTION_MARKER = "[Intervención manual del equipo registrada]"
 RECENT_BOT_ECHO_WINDOW_SECONDS = 300
 DEFAULT_CONVERSATION_CONTEXT_HOURS = 24
@@ -140,6 +141,17 @@ class EvolutionWebhookPayload(BaseModel):
         }
 
 
+class ConversationBuffer(BaseModel):
+    customer_name: str | None = None
+    service: str | None = None
+    for_third_party: bool = False
+    target_person: str | None = None
+    conversation_state: str | None = None
+    last_user_message: str | None = None
+    last_assistant_message: str | None = None
+    updated_at: datetime | None = None
+
+
 class WebhookResponse(BaseModel):
     message: str
 
@@ -187,6 +199,7 @@ async def startup() -> None:
     app.state.test_session_tasks = set()
     app.state.processed_webhook_ids = OrderedDict()
     app.state.recent_outbound_signatures = OrderedDict()
+    app.state.conversation_buffers = OrderedDict()
     allowed_test_numbers = _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
     logger.info(
         "Startup config: env=%s test_mode_enabled=%s test_mode_allowed_numbers=%s test_mode_export_webhook_configured=%s evolution_instance=%s",
@@ -353,6 +366,49 @@ def _configured_admin_numbers(settings: Settings) -> set[str]:
     if single:
         candidates.add(single)
     return candidates
+
+
+def _get_conversation_buffer(whatsapp_id: str) -> ConversationBuffer:
+    buffers: OrderedDict[str, ConversationBuffer] = getattr(app.state, "conversation_buffers", OrderedDict())
+    app.state.conversation_buffers = buffers
+    existing = buffers.get(whatsapp_id)
+    if existing is not None:
+        buffers.move_to_end(whatsapp_id)
+        return existing
+    buffer = ConversationBuffer()
+    buffers[whatsapp_id] = buffer
+    while len(buffers) > MAX_CONVERSATION_BUFFERS:
+        buffers.popitem(last=False)
+    return buffer
+
+
+def _update_conversation_buffer_from_user_message(
+    buffer: ConversationBuffer,
+    message: str,
+    memory: SesionMemoria,
+) -> None:
+    candidate_name = _extract_name_only(message) or _extract_leading_name(message)
+    if candidate_name and not buffer.customer_name:
+        buffer.customer_name = candidate_name
+    candidate_service = _detect_service(message) or memory.servicio_interes
+    if candidate_service:
+        buffer.service = candidate_service
+    third_party = _detect_third_party_target(message)
+    if third_party is not None:
+        buffer.for_third_party = True
+        buffer.target_person = third_party
+    buffer.last_user_message = message
+    buffer.updated_at = datetime.now(UTC)
+
+
+def _update_conversation_buffer_from_assistant_reply(
+    buffer: ConversationBuffer,
+    conversation_state: str,
+    reply: str,
+) -> None:
+    buffer.conversation_state = conversation_state
+    buffer.last_assistant_message = reply
+    buffer.updated_at = datetime.now(UTC)
 
 
 async def _is_rate_limited(whatsapp_id: str, settings: Settings) -> bool:
@@ -556,6 +612,8 @@ async def _handle_webhook_payload(
     logger.warning("Processing webhook message from %s", payload.remote_jid)
 
     memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
+    conversation_buffer = _get_conversation_buffer(payload.remote_jid)
+    _update_conversation_buffer_from_user_message(conversation_buffer, payload.message, memory)
     pending_delete = _memory_delete_is_pending(memory)
     pause_command = _pause_command_action(payload.message)
 
@@ -653,6 +711,7 @@ async def _handle_webhook_payload(
     completed = await _get_completed_booking(db, payload.remote_jid)
     history = await _get_contextual_history(db, payload.remote_jid, pending, completed)
     conversation_state = _derive_conversation_state(payload, history, memory, None, None, settings)
+    conversation_buffer.conversation_state = conversation_state
     logger.info(
         "Conversation state: remote_jid=%s state=%s paused=%s pending=%s completed=%s test_mode=%s",
         payload.remote_jid,
@@ -663,6 +722,7 @@ async def _handle_webhook_payload(
         settings.test_mode_enabled,
     )
     if _should_send_initial_greeting(history, memory, payload):
+        _update_conversation_buffer_from_assistant_reply(conversation_buffer, "new", INITIAL_GREETING_REPLY)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY)
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, INITIAL_GREETING_REPLY)
@@ -671,6 +731,7 @@ async def _handle_webhook_payload(
 
     name_only_reply = _name_only_followup_reply(payload.message, history)
     if name_only_reply:
+        _update_conversation_buffer_from_assistant_reply(conversation_buffer, "collecting_service", name_only_reply)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply)
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, name_only_reply)
@@ -683,6 +744,11 @@ async def _handle_webhook_payload(
 
     structured_booking_reply = await _handle_structured_booking_flow(db, payload, memory, history, settings)
     if structured_booking_reply:
+        _update_conversation_buffer_from_assistant_reply(
+            conversation_buffer,
+            _derive_conversation_state(payload, history, memory, await _get_pending_booking(db, payload.remote_jid), await _get_completed_booking(db, payload.remote_jid), settings),
+            structured_booking_reply,
+        )
         db.add(Interaccion(payload.remote_jid, MessageRole.assistant, structured_booking_reply))
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _summarize_profile(memory.resumen_perfil, payload.message, structured_booking_reply)
@@ -694,9 +760,10 @@ async def _handle_webhook_payload(
         return
 
     response_text = _sanitize_assistant_reply_for_user(
-        await _ask_vanessa(settings, payload, memory, history, pending, completed)
+        await _ask_vanessa(settings, payload, memory, history, pending, completed, conversation_buffer)
     )
 
+    _update_conversation_buffer_from_assistant_reply(conversation_buffer, conversation_state, response_text)
     db.add(Interaccion(payload.remote_jid, MessageRole.assistant, response_text))
     memory.push_name = payload.push_name or memory.push_name
     memory.resumen_perfil = _summarize_profile(memory.resumen_perfil, payload.message, response_text)
@@ -720,6 +787,7 @@ async def _ask_vanessa(
     history: list[Interaccion],
     pending: CitaPendiente | None,
     completed: CitaCompletada | None,
+    conversation_buffer: ConversationBuffer | None = None,
 ) -> str:
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     memory_context = _active_memory_context(memory, history, pending, completed)
@@ -735,7 +803,7 @@ async def _ask_vanessa(
     messages.append(
         {
             "role": "user",
-            "content": _build_user_content(payload, conversation_state),
+            "content": _build_user_content(payload, conversation_state, conversation_buffer),
         }
     )
 
@@ -757,7 +825,11 @@ async def _ask_vanessa(
     return content.strip()
 
 
-def _build_user_content(payload: EvolutionWebhookPayload, conversation_state: str | None = None) -> str | list[dict[str, Any]]:
+def _build_user_content(
+    payload: EvolutionWebhookPayload,
+    conversation_state: str | None = None,
+    conversation_buffer: ConversationBuffer | None = None,
+) -> str | list[dict[str, Any]]:
     estimate = estimate_from_message(payload.message)
     estimate_hint = (
         f"\n\nCotización determinística detectada desde knowledge_base.md:\n{estimate.to_prompt_hint()}"
@@ -774,10 +846,12 @@ def _build_user_content(payload: EvolutionWebhookPayload, conversation_state: st
         if payload.has_media
         else ""
     )
+    buffer_hint = _conversation_buffer_prompt_hint(conversation_buffer)
     text_content = (
         f"Nombre WhatsApp: {payload.push_name or 'No disponible'}\n"
         f"Estado conversacional detectado: {conversation_state or 'unknown'}\n"
         f"{manual_intervention_hint}"
+        f"{buffer_hint}"
         f"Mensaje: {payload.message}"
         f"{_media_prompt_hint(payload)}"
         f"{media_safety_hint}"
@@ -790,6 +864,25 @@ def _build_user_content(payload: EvolutionWebhookPayload, conversation_state: st
         {"type": "text", "text": text_content},
         {"type": "image_url", "image_url": {"url": image_data_url, "detail": "high"}},
     ]
+
+
+def _conversation_buffer_prompt_hint(conversation_buffer: ConversationBuffer | None) -> str:
+    if conversation_buffer is None:
+        return ""
+    fragments: list[str] = []
+    if conversation_buffer.customer_name:
+        fragments.append(f"nombre_detectado={conversation_buffer.customer_name}")
+    if conversation_buffer.service:
+        fragments.append(f"servicio_detectado={conversation_buffer.service}")
+    if conversation_buffer.for_third_party:
+        fragments.append("es_para_tercero=true")
+    if conversation_buffer.target_person:
+        fragments.append(f"tercero_objetivo={conversation_buffer.target_person}")
+    if conversation_buffer.last_assistant_message:
+        fragments.append(f"ultima_respuesta_bot={conversation_buffer.last_assistant_message}")
+    if not fragments:
+        return "\nBuffer conversacional temporal: sin señales relevantes.\n"
+    return "\nBuffer conversacional temporal: " + " | ".join(fragments) + "\n"
 
 
 def _sanitize_history_content_for_model(item: Interaccion) -> str:
@@ -1278,6 +1371,25 @@ def _extract_leading_name(message: str) -> str | None:
     comma_prefix = candidate.split(",", 1)[0].strip()
     if 1 <= len(comma_prefix.split()) <= 4 and re.fullmatch(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ .'-]+", comma_prefix):
         return comma_prefix
+    return None
+
+
+def _detect_third_party_target(message: str) -> str | None:
+    lowered = message.casefold()
+    target_patterns = (
+        ("mi esposa", "esposa"),
+        ("mi novio", "novio"),
+        ("mi novia", "novia"),
+        ("mi pareja", "pareja"),
+        ("mi mama", "mamá"),
+        ("mi mamá", "mamá"),
+        ("mi hermana", "hermana"),
+        ("mi amiga", "amiga"),
+        ("mi prima", "prima"),
+    )
+    for phrase, label in target_patterns:
+        if phrase in lowered:
+            return label
     return None
 
 

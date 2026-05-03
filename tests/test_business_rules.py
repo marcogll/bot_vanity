@@ -50,6 +50,7 @@ from app.main import (
     _nail_options_followup_reply,
     _normalized_whatsapp_digits,
     _extract_name_only,
+    _detect_third_party_target,
     _reply_target,
     _send_reply,
     _service_only_followup_reply,
@@ -60,6 +61,7 @@ from app.main import (
     _is_supported_message_event,
     _technical_fallback_reply,
     _webhook_dedupe_key,
+    ConversationBuffer,
 )
 from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
@@ -193,6 +195,28 @@ def test_pause_command_variants_are_detected() -> None:
 
 def test_extract_name_only_allows_relationship_suffix() -> None:
     assert _extract_name_only("Marco Gallegos es para mi esposa") == "Marco Gallegos"
+
+
+def test_detect_third_party_target_extracts_relationship() -> None:
+    assert _detect_third_party_target("Marco Gallegos es para mi esposa") == "esposa"
+
+
+def test_build_user_content_includes_temporary_buffer_signals() -> None:
+    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="Quiero cita para uñas")
+    buffer = ConversationBuffer(
+        customer_name="Marco Gallegos",
+        service="Uñas",
+        for_third_party=True,
+        target_person="esposa",
+        last_assistant_message="¿Me compartes tu nombre para atenderte mejor?",
+    )
+
+    content = _build_user_content(payload, "collecting_service", buffer)
+
+    assert isinstance(content, str)
+    assert "nombre_detectado=Marco Gallegos" in content
+    assert "servicio_detectado=Uñas" in content
+    assert "es_para_tercero=true" in content
 
 
 def test_bot_paused_marker_roundtrip() -> None:
