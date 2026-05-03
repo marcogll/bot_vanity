@@ -48,6 +48,7 @@ from app.main import (
     _has_advanced_conversation_context,
     _name_only_followup_reply,
     _nail_options_followup_reply,
+    _normalized_whatsapp_digits,
     _reply_target,
     _send_reply,
     _service_only_followup_reply,
@@ -55,6 +56,7 @@ from app.main import (
     _should_send_booking_follow_up,
     _should_send_initial_greeting,
     _should_handle_in_test_mode,
+    _is_supported_message_event,
     _technical_fallback_reply,
     _webhook_dedupe_key,
 )
@@ -76,11 +78,11 @@ def test_webhook_secret_allows_event_suffix() -> None:
 def test_parse_test_mode_allowed_numbers_normalizes_digits() -> None:
     numbers = _parse_test_mode_allowed_numbers("+52 844 111 2233, 5218112345678\n844-555-9999")
 
-    assert numbers == {"528441112233", "5218112345678", "8445559999"}
+    assert numbers == {"528441112233", "528112345678", "8445559999"}
 
 
 def test_is_test_mode_allowed_number_matches_remote_jid() -> None:
-    settings = type("Settings", (), {"test_mode_allowed_numbers": "5218441112233,5218112345678"})()
+    settings = type("Settings", (), {"test_mode_allowed_numbers": "528441112233,528112345678"})()
 
     assert _is_test_mode_allowed_number("5218441112233@s.whatsapp.net", settings)
     assert not _is_test_mode_allowed_number("5218449990000@s.whatsapp.net", settings)
@@ -91,8 +93,8 @@ def test_should_handle_in_test_mode_allows_admin_even_if_not_allowlisted() -> No
         "Settings",
         (),
         {
-            "test_mode_allowed_numbers": "5218112345678",
-            "admin_phone_number": "5218441112233",
+            "test_mode_allowed_numbers": "528112345678",
+            "admin_phone_number": "528441112233",
         },
     )()
     payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="hola")
@@ -122,7 +124,7 @@ def test_memory_delete_trigger_is_exact_command() -> None:
 
 
 def test_memory_delete_admin_authorization_uses_configured_phone() -> None:
-    settings = type("Settings", (), {"admin_phone_number": "5218446686100", "admin_phone_numbers": ""})()
+    settings = type("Settings", (), {"admin_phone_number": "528446686100", "admin_phone_numbers": ""})()
     authorized = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="dipiridú")
     unauthorized = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="dipiridú")
 
@@ -134,11 +136,41 @@ def test_memory_delete_admin_authorization_allows_multiple_configured_admins() -
     settings = type(
         "Settings",
         (),
-        {"admin_phone_number": "5218446686100", "admin_phone_numbers": "5218441026472,5218445047771"},
+        {"admin_phone_number": "528446686100", "admin_phone_numbers": "528441026472,528445047771"},
     )()
     authorized = EvolutionWebhookPayload(remoteJid="5218445047771@s.whatsapp.net", message="dipiridú")
 
     assert _is_authorized_admin(authorized, settings)
+
+
+def test_normalized_whatsapp_digits_removes_mexico_mobile_prefix() -> None:
+    assert _normalized_whatsapp_digits("5218441026472@s.whatsapp.net") == "528441026472"
+    assert _normalized_whatsapp_digits("+52 844 102 6472") == "528441026472"
+
+
+def test_supported_message_event_filters_non_message_events() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "event": "contacts.update",
+            "instance": "sofia_prod",
+            "data": [{"remoteJid": "249391621378064@lid"}],
+        }
+    )
+
+    assert not _is_supported_message_event(payload, "/webhook")
+
+
+def test_supported_message_event_accepts_messages_upsert_variants() -> None:
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "event": "MESSAGES_UPSERT",
+            "instance": "sofia_prod",
+            "key": {"remoteJid": "5218441026472@s.whatsapp.net", "fromMe": False},
+            "message": {"conversation": "Hola"},
+        }
+    )
+
+    assert _is_supported_message_event(payload, "/webhook")
 
 
 def test_memory_delete_confirmation_words() -> None:

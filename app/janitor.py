@@ -10,6 +10,7 @@ from app.models import CitaPendiente, Interaccion, SesionMemoria
 
 
 logger = logging.getLogger("vanessa.janitor")
+logger.setLevel(logging.INFO)
 
 
 async def purge_expired_records() -> None:

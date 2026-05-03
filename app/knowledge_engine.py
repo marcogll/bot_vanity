@@ -7,6 +7,7 @@ from app.config import get_settings
 
 
 logger = logging.getLogger("vanessa.knowledge")
+logger.setLevel(logging.INFO)
 
 
 class KnowledgeEngine:

@@ -54,6 +54,7 @@ LOCAL_TIMEZONE = ZoneInfo("America/Monterrey")
 
 
 class EvolutionWebhookPayload(BaseModel):
+    event_name: str | None = Field(default=None, alias="event")
     remote_jid: str = Field(default="", alias="remoteJid")
     sender: str | None = None
     reply_candidates: list[str] = Field(default_factory=list, alias="replyCandidates")
@@ -88,6 +89,7 @@ class EvolutionWebhookPayload(BaseModel):
                 sender = _find_reply_identifier(value, remote_jid)
             media = _extract_media_metadata(top_level_message, value)
             return {
+                "event": value.get("event"),
                 "remoteJid": remote_jid,
                 "sender": sender,
                 "replyCandidates": _find_reply_identifiers(value, remote_jid),
@@ -118,6 +120,7 @@ class EvolutionWebhookPayload(BaseModel):
         message = data.get("message")
         media = _extract_media_metadata(message, data)
         return {
+            "event": value.get("event"),
             "remoteJid": remote_jid,
             "sender": sender,
             "replyCandidates": _find_reply_identifiers(value, remote_jid),
@@ -222,6 +225,9 @@ async def webhook(
     payload: EvolutionWebhookPayload,
     settings: Settings = Depends(get_settings),
 ) -> WebhookResponse:
+    if not _is_supported_message_event(payload, request.url.path):
+        logger.info("Ignored non-message event: event=%s path=%s", payload.event_name, request.url.path)
+        return WebhookResponse(message="ignored_event")
     if payload.from_me:
         if _is_test_mode_enabled(settings) and not _is_test_mode_allowed_number(payload.remote_jid, settings):
             logger.info("Ignoring outbound webhook outside allowlist during test mode for %s", payload.remote_jid)
@@ -327,14 +333,14 @@ def _is_test_mode_enabled(settings: Settings) -> bool:
 def _parse_test_mode_allowed_numbers(raw: str) -> set[str]:
     separators_normalized = re.sub(r"[\n;]+", ",", raw)
     return {
-        _digits_only(chunk)
+        _normalized_whatsapp_digits(chunk)
         for chunk in (item.strip() for item in separators_normalized.split(","))
-        if _digits_only(chunk)
+        if _normalized_whatsapp_digits(chunk)
     }
 
 
 def _is_test_mode_allowed_number(whatsapp_id: str, settings: Settings) -> bool:
-    return _digits_only(whatsapp_id) in _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
+    return _normalized_whatsapp_digits(whatsapp_id) in _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
 
 
 def _should_handle_in_test_mode(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
@@ -343,7 +349,7 @@ def _should_handle_in_test_mode(payload: EvolutionWebhookPayload, settings: Sett
 
 def _configured_admin_numbers(settings: Settings) -> set[str]:
     candidates = _parse_test_mode_allowed_numbers(getattr(settings, "admin_phone_numbers", ""))
-    single = _digits_only(getattr(settings, "admin_phone_number", ""))
+    single = _normalized_whatsapp_digits(getattr(settings, "admin_phone_number", ""))
     if single:
         candidates.add(single)
     return candidates
@@ -1551,6 +1557,20 @@ def _digits_only(value: str) -> str:
     return "".join(character for character in value if character.isdigit())
 
 
+def _normalized_whatsapp_digits(value: str) -> str:
+    digits = _digits_only(value)
+    if digits.startswith("521") and len(digits) == 13:
+        return f"52{digits[3:]}"
+    return digits
+
+
+def _is_supported_message_event(payload: EvolutionWebhookPayload, request_path: str) -> bool:
+    normalized_event = (payload.event_name or "").strip().casefold().replace("_", ".")
+    if normalized_event:
+        return normalized_event == "messages.upsert"
+    return request_path.rstrip("/").endswith("/messages-upsert") or bool(payload.message.strip())
+
+
 async def _get_or_create_memory(
     db: AsyncSession,
     whatsapp_id: str,
@@ -2138,7 +2158,7 @@ def _is_authorized_admin(payload: EvolutionWebhookPayload, settings: Settings) -
         payload.sender or "",
         *payload.reply_candidates,
     ]
-    return any(_digits_only(candidate) in configured_admins for candidate in candidates)
+    return any(_normalized_whatsapp_digits(candidate) in configured_admins for candidate in candidates)
 
 
 def _is_sender_debug_command(message: str) -> bool:

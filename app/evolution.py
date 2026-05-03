@@ -6,6 +6,7 @@ from app.config import get_settings
 
 
 logger = logging.getLogger("vanessa.evolution")
+logger.setLevel(logging.INFO)
 
 
 async def send_text_message(number: str, text: str, instance_name: str | None = None) -> None:
