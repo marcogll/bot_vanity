@@ -103,6 +103,22 @@ Variables críticas:
 - `BOOKING_URL`
 - `PAYMENT_URL`
 
+Variables del panel admin:
+
+- `ADMIN_WEBUI_ENABLED=true`
+- `ADMIN_BOOTSTRAP_USERNAME=admin`
+- `ADMIN_BOOTSTRAP_PASSWORD=<password fuerte temporal>`
+- `ADMIN_SESSION_MINUTES=120`
+- `ADMIN_LOGIN_MAX_ATTEMPTS=5`
+- `ADMIN_LOCKOUT_MINUTES=15`
+
+Notas:
+
+- `ADMIN_BOOTSTRAP_PASSWORD` solo se usa para sembrar el primer admin si no existe.
+- el password se guarda hasheado en DB, no reversible
+- en el primer login el panel obliga a rotar ese password temporal
+- idealmente el panel debe ir detrás de `HTTPS` y una capa extra como VPN o allowlist de IP
+
 Genera una llave Fernet válida:
 
 ```bash
@@ -157,6 +173,41 @@ El estilo objetivo viene de chats reales documentados en:
 
 - [messaging_selfimp.md](/home/marco/Work/code/bot_vanity/whatsapp_interactions/messaging_selfimp.md)
 - [docs/system_prompt.md](/home/marco/Work/code/bot_vanity/docs/system_prompt.md)
+- [docs/conversation_flow.md](/home/marco/Work/code/bot_vanity/docs/conversation_flow.md)
+
+## Diagrama conversacional
+
+La lógica conversacional ya no debe sentirse como script lineal. La referencia formal por estados y escenarios está en:
+
+- [docs/conversation_flow.md](/home/marco/Work/code/bot_vanity/docs/conversation_flow.md)
+
+Resumen corto:
+
+1. conversación nueva:
+   pedir nombre y mencionar una sola vez que también acepta audios
+2. intención ya declarada:
+   conservar servicio/fecha y no reiniciar
+3. si es para un tercero:
+   reconocerlo y seguir natural
+4. si dice `uñas`:
+   primero acotar subtipo
+5. si responde subtipo:
+   luego preguntar retiro como aclaración natural
+6. ya con suficiente contexto:
+   orientar o mandar booking
+7. si llega captura/comprobante:
+   validar, no volver a onboarding
+8. si ya respondió humana:
+   no duplicar ni reabrir flujo
+
+Escenarios que deben sentirse naturales:
+
+- `quiero cita para uñas el lunes`
+- `Marco Gallegos es para mi esposa`
+- `uñas y pedicure`
+- `te mando la captura`
+- `se me cayó una uña`
+- `ya me atendió recepción`
 
 ## Contexto y memoria
 
@@ -396,6 +447,5 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite focalizada actual:
 
 ```text
-64 passed
+78 passed
 ```
-
