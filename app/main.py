@@ -1300,9 +1300,9 @@ def _last_assistant_requested_service(history: list[Interaccion]) -> bool:
     last = history[-1]
     if last.role != MessageRole.assistant:
         return False
-    normalized = last.content.casefold()
-    return "qué servicio buscas" in normalized and all(
-        service in normalized for service in ("uñas", "pestañas", "cejas")
+    normalized = _normalize_text_for_matching(last.content)
+    return "que servicio busc" in normalized and all(
+        service in normalized for service in ("unas", "pestanas", "cejas")
     )
 
 

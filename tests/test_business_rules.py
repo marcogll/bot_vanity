@@ -247,6 +247,23 @@ def test_name_only_followup_handles_name_plus_booking_context() -> None:
     assert "Gracias, Marco" in reply
 
 
+def test_service_only_followup_handles_third_party_service_prompt_variant() -> None:
+    history = [
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.user, "Marco Gallegos la cita es para mí esposa"),
+        Interaccion(
+            "5218446686100@s.whatsapp.net",
+            MessageRole.assistant,
+            "¡Gracias, Marco! Con gusto te ayudo con la atención para tu esposa. 💗 Cuéntame, ¿qué servicio busca: uñas, pestañas o cejas?",
+        ),
+    ]
+
+    reply = _service_only_followup_reply("Uñas y pedicure", history)
+
+    assert reply is not None
+    assert "servicio de uñas" in reply
+    assert "retirar" in reply
+
+
 def test_bot_paused_marker_roundtrip() -> None:
     summary = _mark_bot_paused("Interés detectado: Uñas")
 
