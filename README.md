@@ -5,11 +5,20 @@
   </picture>
 </p>
 
-<h1 align="center">Sofía Bot Vanity</h1>
+<h1 align="center">bot_vanity.git</h1>
 
 <p align="center">
-  Backend FastAPI para WhatsApp con Evolution API, RAG en Markdown y reglas conversacionales endurecidas para Sofía.
+  <p align="center">
 </p>
+
+<p align="center">
+  [![Docker](https://img.shields.io/badge/docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://github.com/marcogll)
+  [![FastAPI](https://img.shields.io/badge/fastapi-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://github.com/marcogll)
+  [![OpenAI](https://img.shields.io/badge/openai-412991?style=for-the-badge&logo=openai&logoColor=white)](https://github.com/marcogll)
+  [![PostgreSQL](https://img.shields.io/badge/postgresql-336791?style=for-the-badge&logo=postgresql&logoColor=white)](https://github.com/marcogll)
+  [![Python](https://img.shields.io/badge/python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://github.com/marcogll)
+</p>
+
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.11%2B-111111?style=flat-square&logo=python&logoColor=white">
