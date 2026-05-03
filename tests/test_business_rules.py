@@ -48,6 +48,7 @@ from app.main import (
     _has_advanced_conversation_context,
     _name_only_followup_reply,
     _nail_options_followup_reply,
+    _nail_subservice_followup_reply,
     _normalized_whatsapp_digits,
     _extract_name_only,
     _detect_third_party_target,
@@ -260,8 +261,25 @@ def test_service_only_followup_handles_third_party_service_prompt_variant() -> N
     reply = _service_only_followup_reply("Uñas y pedicure", history)
 
     assert reply is not None
-    assert "servicio de uñas" in reply
-    assert "retirar" in reply
+    assert "Antes de agendar" in reply
+    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
+
+
+def test_nail_subservice_followup_separates_retiro_from_narrowing() -> None:
+    history = [
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.user, "Quiero cita para uñas"),
+        Interaccion(
+            "5218446686100@s.whatsapp.net",
+            MessageRole.assistant,
+            "¡Perfecto! Antes de agendar, te ayudo a ubicar la mejor opción. 💗 ¿Busca gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies?",
+        ),
+    ]
+
+    reply = _nail_subservice_followup_reply("Uñas y pedicure", history)
+
+    assert reply is not None
+    assert "retiro, se cotiza aparte" in reply
+    assert "sencillo o más completo" in reply
 
 
 def test_bot_paused_marker_roundtrip() -> None:
@@ -952,8 +970,8 @@ def test_name_only_reply_uses_prior_audio_intent_after_initial_greeting() -> Non
     assert reply is not None
     assert "Gracias, Marco" in reply
     assert "buscas agendar" in reply
-    assert "producto para retirar" in reply
-    assert "tono liso o diseño" in reply
+    assert "Antes de agendar" in reply
+    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
     assert "qué servicio buscas" not in reply
 
 
@@ -970,8 +988,8 @@ def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> No
 
     assert reply is not None
     assert "Gracias, Alejandra" in reply
-    assert "producto para retirar" in reply
-    assert "tono liso o diseño" in reply
+    assert "Antes de agendar" in reply
+    assert "combo manos y pies" in reply
 
 
 def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
@@ -989,8 +1007,8 @@ def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
     reply = _service_only_followup_reply("Uñas", history)
 
     assert reply is not None
-    assert "producto para retirar" in reply
-    assert "tono liso o diseño" in reply
+    assert "Antes de agendar" in reply
+    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
 
 
 def test_nail_options_question_does_not_need_llm() -> None:

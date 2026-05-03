@@ -104,8 +104,11 @@ Ejemplo:
 
 Antes de cotizar con precisión, aclara solo si hace falta:
 
-- si trae retiro
-- si busca tono liso o diseño
+- primero qué tipo de servicio busca dentro de uñas
+  - por ejemplo: gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies
+- después, si aplica, pregunta si trae retiro
+- deja claro que el retiro va aparte cuando corresponda
+- una vez acotado el servicio, pregunta si lo busca tono liso o diseño solo cuando sí ayude a recomendar/cotizar mejor
 
 ### Incidencias
 

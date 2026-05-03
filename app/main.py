@@ -1164,6 +1164,7 @@ def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | Non
         _name_only_followup_reply(message, history)
         or _name_and_service_followup_reply(message, history)
         or _service_only_followup_reply(message, history)
+        or _nail_subservice_followup_reply(message, history)
         or _nail_options_followup_reply(message, history)
     )
 
@@ -1214,8 +1215,8 @@ def _service_only_followup_reply(message: str, history: list[Interaccion]) -> st
 def _service_details_reply(service: str, greeting: str) -> str | None:
     if service == "Uñas":
         return (
-            f"{greeting}Para orientarte mejor con tu servicio de uñas, "
-            "¿traes algún producto para retirar y buscas tono liso o diseño? 💗"
+            f"{greeting}Antes de agendar, te ayudo a ubicar la mejor opción. 💗 "
+            "¿Busca gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies?"
         )
     if service == "Pestañas":
         return (
@@ -1228,6 +1229,23 @@ def _service_details_reply(service: str, greeting: str) -> str | None:
             "¿buscas laminado, diseño, depilación o tinte? 💗"
         )
     return None
+
+
+def _nail_subservice_followup_reply(message: str, history: list[Interaccion]) -> str | None:
+    if not _last_assistant_requested_nail_subservice(history):
+        return None
+    subtype = _detect_nail_subservice(message)
+    if subtype is None:
+        return None
+    if subtype in {"Pedicure", "Manicure", "Combo manos y pies"}:
+        return (
+            "Perfecto 💗 Si trae retiro, se cotiza aparte cuando aplica. "
+            "Para recomendarte la mejor opción, ¿lo busca algo sencillo o más completo?"
+        )
+    return (
+        "Perfecto 💗 Si trae retiro, se cotiza aparte cuando aplica. "
+        "¿Lo busca en tono liso o con diseño?"
+    )
 
 
 def _nail_options_followup_reply(message: str, history: list[Interaccion]) -> str | None:
@@ -1304,6 +1322,17 @@ def _last_assistant_requested_service(history: list[Interaccion]) -> bool:
     return "que servicio busc" in normalized and all(
         service in normalized for service in ("unas", "pestanas", "cejas")
     )
+
+
+def _last_assistant_requested_nail_subservice(history: list[Interaccion]) -> bool:
+    if not history:
+        return False
+    last = history[-1]
+    if last.role != MessageRole.assistant:
+        return False
+    normalized = _normalize_text_for_matching(last.content)
+    required_tokens = ("gelish", "manicure", "acrilicas", "soft gel", "pedicure")
+    return all(token in normalized for token in required_tokens)
 
 
 def _last_assistant_requested_name(history: list[Interaccion]) -> bool:
@@ -2427,6 +2456,25 @@ def _detect_service(message: str) -> str | None:
         return "Pestañas"
     if any(word in normalized for word in ("ceja", "brow", "laminado")):
         return "Cejas"
+    return None
+
+
+def _detect_nail_subservice(message: str) -> str | None:
+    normalized = _normalize_text_for_matching(message)
+    if "combo" in normalized or ("manicure" in normalized and "pedicure" in normalized):
+        return "Combo manos y pies"
+    if "pedicure" in normalized or "pedi" in normalized:
+        return "Pedicure"
+    if "manicure" in normalized:
+        return "Manicure"
+    if "soft gel" in normalized:
+        return "Soft Gel"
+    if "gelish" in normalized:
+        return "Gelish"
+    if "acrilic" in normalized or "acrilicas" in normalized:
+        return "Acrílicas"
+    if "rubber" in normalized:
+        return "Base Rubber"
     return None
 
 
