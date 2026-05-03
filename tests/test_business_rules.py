@@ -62,6 +62,7 @@ from app.main import (
     _technical_fallback_reply,
     _webhook_dedupe_key,
     ConversationBuffer,
+    _local_recovery_reply,
 )
 from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
@@ -195,6 +196,7 @@ def test_pause_command_variants_are_detected() -> None:
 
 def test_extract_name_only_allows_relationship_suffix() -> None:
     assert _extract_name_only("Marco Gallegos es para mi esposa") == "Marco Gallegos"
+    assert _extract_name_only("Marco Gallegos es para mí esposa") == "Marco Gallegos"
 
 
 def test_detect_third_party_target_extracts_relationship() -> None:
@@ -217,6 +219,19 @@ def test_build_user_content_includes_temporary_buffer_signals() -> None:
     assert "nombre_detectado=Marco Gallegos" in content
     assert "servicio_detectado=Uñas" in content
     assert "es_para_tercero=true" in content
+
+
+def test_local_recovery_uses_name_only_followup_for_third_party() -> None:
+    history = [
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.user, "Hello"),
+        Interaccion("5218446686100@s.whatsapp.net", MessageRole.assistant, INITIAL_GREETING_REPLY),
+    ]
+
+    reply = _local_recovery_reply("Marco Gallegos es para mí esposa", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
+    assert "tu esposa" in reply
 
 
 def test_bot_paused_marker_roundtrip() -> None:

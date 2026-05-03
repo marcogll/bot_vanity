@@ -1161,7 +1161,8 @@ def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[In
 
 def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | None:
     return (
-        _name_and_service_followup_reply(message, history)
+        _name_only_followup_reply(message, history)
+        or _name_and_service_followup_reply(message, history)
         or _service_only_followup_reply(message, history)
         or _nail_options_followup_reply(message, history)
     )
@@ -1177,6 +1178,12 @@ def _name_only_followup_reply(message: str, history: list[Interaccion]) -> str |
     prior_service = _service_from_recent_user_context(history)
     if prior_service:
         return _service_details_reply(prior_service, _followup_greeting_from_recent_user_context(first_name, history))
+    third_party_target = _detect_third_party_target(message)
+    if third_party_target is not None:
+        return (
+            f"¡Gracias, {first_name}! Con gusto te ayudo con la atención para tu {third_party_target}. 💗 "
+            "Cuéntame, ¿qué servicio busca: uñas, pestañas o cejas?"
+        )
     return (
         f"¡Gracias, {first_name}! Encantada de atenderte. 💗 "
         "Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?"
@@ -1342,7 +1349,7 @@ def _extract_name_only(message: str) -> str | None:
 
     cleaned = re.sub(r"^(soy|me llamo|mi nombre es)\s+", "", normalized, flags=re.IGNORECASE).strip()
     cleaned = re.split(
-        r"\s+(?:es\s+para|para)\s+(?:mi\s+)?(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
+        r"\s+(?:es\s+para|para)\s+(?:mi|mí\s+)?\s*(?:esposa|novia|pareja|mamá|mama|hermana|amiga|prima)\b",
         cleaned,
         maxsplit=1,
         flags=re.IGNORECASE,
@@ -1375,7 +1382,7 @@ def _extract_leading_name(message: str) -> str | None:
 
 
 def _detect_third_party_target(message: str) -> str | None:
-    lowered = message.casefold()
+    lowered = _normalize_text_for_matching(message)
     target_patterns = (
         ("mi esposa", "esposa"),
         ("mi novio", "novio"),
@@ -1673,6 +1680,11 @@ def _is_low_priority_reply_path(path: str) -> bool:
 
 def _digits_only(value: str) -> str:
     return "".join(character for character in value if character.isdigit())
+
+
+def _normalize_text_for_matching(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(character for character in normalized if not unicodedata.combining(character))
 
 
 def _normalized_whatsapp_digits(value: str) -> str:
