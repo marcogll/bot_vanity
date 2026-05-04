@@ -96,7 +96,21 @@ DB_TABLES: dict[str, tuple[Any, list[str], str]] = {
     ),
     "service_catalog": (
         ServiceCatalog,
-        ["id", "slug", "name", "category", "base_price", "duration_minutes", "is_active", "updated_at"],
+        [
+            "id",
+            "external_service_id",
+            "name",
+            "base_price",
+            "purchase_price",
+            "duration_minutes",
+            "additional_time_minutes",
+            "tax_percent",
+            "description",
+            "category",
+            "service_type",
+            "is_active",
+            "updated_at",
+        ],
         "updated_at",
     ),
 }
@@ -295,58 +309,80 @@ async def services_page(request: Request, db: AsyncSession = Depends(get_db_sess
     if isinstance(current_user, Response):
         return current_user
     result = await db.execute(select(ServiceCatalog).order_by(ServiceCatalog.category, ServiceCatalog.name))
-    services = result.scalars().all()
-    edit_id = request.query_params.get("edit")
-    editing = None
-    if edit_id:
-        for service in services:
-            if str(service.id) == edit_id:
-                editing = service
-                break
+    all_services = result.scalars().all()
+    current_q = request.query_params.get("q", "").strip()
+    current_category = request.query_params.get("category", "").strip()
+    current_service_type = request.query_params.get("service_type", "").strip()
+    services = [
+        item
+        for item in all_services
+        if _service_matches_filters(
+            item,
+            query=current_q,
+            category=current_category,
+            service_type=current_service_type,
+        )
+    ]
+    categories = sorted({item.category for item in all_services if item.category})
+    service_return_to = _services_return_to(request)
     service_rows = "".join(
-        f"""
-        <tr>
-          <td>{_e(item.name)}</td>
-          <td>{_e(item.category)}</td>
-          <td>{item.base_price:.2f}</td>
-          <td>{item.duration_minutes} min</td>
-          <td>{'Sí' if item.is_active else 'No'}</td>
-          <td>
-            <a href="/admin/services?edit={item.id}">Editar</a>
-            <form method="post" action="/admin/services/{item.id}/delete" class="inline">
-              {_csrf_input(session_payload)}
-              <button type="submit" class="danger ghost">Eliminar</button>
-            </form>
-          </td>
-        </tr>
-        """
+        _service_row_html(item, session_payload, service_return_to)
         for item in services
-    ) or "<tr><td colspan='6' class='muted'>No hay servicios cargados.</td></tr>"
+    ) or "<tr><td colspan='13' class='muted'>No hay servicios cargados.</td></tr>"
+    filters_html = f"""
+      <form method="get" action="/admin/services" class="toolbar wrap filters">
+        <input type="search" name="q" value="{_e(current_q)}" placeholder="Buscar por nombre, descripción, ID o categoría">
+        <select name="category">
+          <option value="">Todas las categorías</option>
+          {_service_category_options(categories, current_category)}
+        </select>
+        <select name="service_type">
+          <option value="">Todos los tipos</option>
+          {_service_type_options(current_service_type, allow_blank=False)}
+        </select>
+        <button type="submit">Filtrar</button>
+        <a class="button secondary" href="/admin/services">Limpiar</a>
+      </form>
+      <p class="muted">Mostrando {len(services)} de {len(all_services)} servicios.</p>
+    """
     body = f"""
     <section class="grid two">
       <article class="panel">
         <h1>Servicios</h1>
-        <table>
-          <thead><tr><th>Nombre</th><th>Categoría</th><th>Precio</th><th>Duración</th><th>Activo</th><th>Acciones</th></tr></thead>
+        {filters_html}
+        <div class="table-wrap">
+        <table class="wide-table">
+          <thead><tr><th>ID del servicio</th><th>ID externo</th><th>Nombre del servicio</th><th>Precio de venta</th><th>Duración</th><th>Precio de compra</th><th>Tiempo adicional</th><th>Impuestos</th><th>Descripción</th><th>Nombre de la categoría</th><th>Tipo de servicio</th><th>Activo</th><th>Acciones</th></tr></thead>
           <tbody>{service_rows}</tbody>
         </table>
+        </div>
         <div class="toolbar">
           <a class="button secondary" href="/admin/services/export.csv">Exportar CSV</a>
           <a class="button secondary" href="/admin/services/export.json">Exportar JSON</a>
         </div>
       </article>
       <article class="panel">
-        <h2>{'Editar servicio' if editing else 'Nuevo servicio'}</h2>
-        <form method="post" action="/admin/services{'/' + str(editing.id) if editing else ''}" class="stack">
+        <h2>Nuevo servicio</h2>
+        <form method="post" action="/admin/services" class="stack">
           {_csrf_input(session_payload)}
-          <label>Nombre<input type="text" name="name" value="{_e(editing.name if editing else '')}" required></label>
-          <label>Slug<input type="text" name="slug" value="{_e(editing.slug if editing else '')}" placeholder="se-autogenera-si-vacio"></label>
-          <label>Categoría<input type="text" name="category" value="{_e(editing.category if editing else 'General')}" required></label>
-          <label>Descripción<textarea name="description" rows="4">{_e(editing.description if editing else '')}</textarea></label>
-          <label>Precio base<input type="number" name="base_price" value="{editing.base_price if editing else '0'}" step="0.01" min="0" required></label>
-          <label>Duración (minutos)<input type="number" name="duration_minutes" value="{editing.duration_minutes if editing else '0'}" min="0" required></label>
-          <label class="check"><input type="checkbox" name="is_active" {'checked' if editing is None or editing.is_active else ''}> Servicio activo</label>
-          <button type="submit">{'Guardar cambios' if editing else 'Crear servicio'}</button>
+          <input type="hidden" name="return_to" value="{_e(service_return_to)}">
+          <label>Nombre<input type="text" name="name" value="" required></label>
+          <label>ID externo<input type="text" name="external_service_id" value="" placeholder="Opcional"></label>
+          <label>Slug<input type="text" name="slug" value="" placeholder="se-autogenera-si-vacio"></label>
+          <label>Nombre de la categoría<input type="text" name="category" value="{_e(current_category or 'General')}" required></label>
+          <label>Tipo de servicio
+            <select name="service_type">
+              {_service_type_options(current_service_type or 'service')}
+            </select>
+          </label>
+          <label>Descripción<textarea name="description" rows="4"></textarea></label>
+          <label>Precio de venta<input type="number" name="base_price" value="0" step="0.01" min="0" required></label>
+          <label>Precio de compra<input type="number" name="purchase_price" value="0" step="0.01" min="0" required></label>
+          <label>Duración (minutos)<input type="number" name="duration_minutes" value="0" min="0" required></label>
+          <label>Tiempo adicional (minutos)<input type="number" name="additional_time_minutes" value="0" min="0" required></label>
+          <label>Impuestos %<input type="number" name="tax_percent" value="0" step="0.01" min="0" required></label>
+          <label class="check"><input type="checkbox" name="is_active" checked> Servicio activo</label>
+          <button type="submit">Crear servicio</button>
         </form>
       </article>
     </section>
@@ -354,6 +390,7 @@ async def services_page(request: Request, db: AsyncSession = Depends(get_db_sess
       <h2>Importar catálogo</h2>
       <form method="post" action="/admin/services/import" class="stack">
         {_csrf_input(session_payload)}
+        <input type="hidden" name="return_to" value="{_e(service_return_to)}">
         <label>Formato
           <select name="format">
             <option value="csv">CSV</option>
@@ -363,8 +400,12 @@ async def services_page(request: Request, db: AsyncSession = Depends(get_db_sess
         <label>Pega aquí el contenido del archivo<textarea name="payload_text" rows="12" placeholder='[{{
   "name": "Gelish",
   "category": "Uñas",
+  "service_type": "service",
   "base_price": 450,
-  "duration_minutes": 60
+  "purchase_price": 0,
+  "duration_minutes": 60,
+  "additional_time_minutes": 0,
+  "tax_percent": 0
 }}]'></textarea></label>
         <button type="submit">Importar</button>
       </form>
@@ -379,19 +420,20 @@ async def create_service(request: Request, db: AsyncSession = Depends(get_db_ses
     if isinstance(current_user, Response):
         return current_user
     form = await _parse_form(request)
+    return_to = _safe_return_to(form.get("return_to", ""))
     if not _valid_csrf(form, session_payload):
         return HTMLResponse("CSRF inválido", status_code=400)
     error, payload = _parse_service_payload(form)
     if error:
-        return _redirect("/admin/services", error)
+        return _redirect(return_to, error)
     existing = await db.execute(select(ServiceCatalog).where(ServiceCatalog.slug == payload["slug"]))
     if existing.scalar_one_or_none():
-        return _redirect("/admin/services", "Ya existe un servicio con ese slug.")
+        return _redirect(return_to, "Ya existe un servicio con ese slug.")
     service = ServiceCatalog(**payload)
     db.add(service)
     await _audit(db, request, current_user, action="service.create", entity_type="service_catalog", payload=payload)
     await db.commit()
-    return _redirect("/admin/services", "Servicio creado.")
+    return _redirect(return_to, "Servicio creado.")
 
 
 @admin_router.post("/services/{service_id}")
@@ -400,22 +442,23 @@ async def update_service(service_id: str, request: Request, db: AsyncSession = D
     if isinstance(current_user, Response):
         return current_user
     form = await _parse_form(request)
+    return_to = _safe_return_to(form.get("return_to", ""))
     if not _valid_csrf(form, session_payload):
         return HTMLResponse("CSRF inválido", status_code=400)
     try:
         service_uuid = uuid.UUID(service_id)
     except ValueError:
-        return _redirect("/admin/services", "ID de servicio inválido.")
+        return _redirect(return_to, "ID de servicio inválido.")
     result = await db.execute(select(ServiceCatalog).where(ServiceCatalog.id == service_uuid))
     service = result.scalar_one_or_none()
     if service is None:
-        return _redirect("/admin/services", "Servicio no encontrado.")
+        return _redirect(return_to, "Servicio no encontrado.")
     error, payload = _parse_service_payload(form)
     if error:
-        return _redirect(f"/admin/services?edit={service_id}", error)
+        return _redirect(return_to, error)
     duplicate = await db.execute(select(ServiceCatalog).where(ServiceCatalog.slug == payload["slug"], ServiceCatalog.id != service.id))
     if duplicate.scalar_one_or_none():
-        return _redirect(f"/admin/services?edit={service_id}", "Ese slug ya está en uso.")
+        return _redirect(return_to, "Ese slug ya está en uso.")
     for key, value in payload.items():
         setattr(service, key, value)
     await _audit(
@@ -428,7 +471,7 @@ async def update_service(service_id: str, request: Request, db: AsyncSession = D
         payload=payload,
     )
     await db.commit()
-    return _redirect("/admin/services", "Servicio actualizado.")
+    return _redirect(return_to, "Servicio actualizado.")
 
 
 @admin_router.post("/services/{service_id}/delete")
@@ -437,16 +480,17 @@ async def delete_service(service_id: str, request: Request, db: AsyncSession = D
     if isinstance(current_user, Response):
         return current_user
     form = await _parse_form(request)
+    return_to = _safe_return_to(form.get("return_to", ""))
     if not _valid_csrf(form, session_payload):
         return HTMLResponse("CSRF inválido", status_code=400)
     try:
         service_uuid = uuid.UUID(service_id)
     except ValueError:
-        return _redirect("/admin/services", "ID de servicio inválido.")
+        return _redirect(return_to, "ID de servicio inválido.")
     result = await db.execute(select(ServiceCatalog).where(ServiceCatalog.id == service_uuid))
     service = result.scalar_one_or_none()
     if service is None:
-        return _redirect("/admin/services", "Servicio no encontrado.")
+        return _redirect(return_to, "Servicio no encontrado.")
     await db.delete(service)
     await _audit(
         db,
@@ -457,7 +501,7 @@ async def delete_service(service_id: str, request: Request, db: AsyncSession = D
         entity_id=service_id,
     )
     await db.commit()
-    return _redirect("/admin/services", "Servicio eliminado.")
+    return _redirect(return_to, "Servicio eliminado.")
 
 
 @admin_router.post("/services/import")
@@ -466,6 +510,7 @@ async def import_services(request: Request, db: AsyncSession = Depends(get_db_se
     if isinstance(current_user, Response):
         return current_user
     form = await _parse_form(request)
+    return_to = _safe_return_to(form.get("return_to", ""))
     if not _valid_csrf(form, session_payload):
         return HTMLResponse("CSRF inválido", status_code=400)
     format_name = form.get("format", "csv").strip().lower()
@@ -473,7 +518,7 @@ async def import_services(request: Request, db: AsyncSession = Depends(get_db_se
     try:
         rows = _parse_import_rows(format_name, payload_text)
     except ValueError as exc:
-        return _redirect("/admin/services", f"Importación inválida: {exc}")
+        return _redirect(return_to, f"Importación inválida: {exc}")
     created = 0
     updated = 0
     for row in rows:
@@ -499,7 +544,7 @@ async def import_services(request: Request, db: AsyncSession = Depends(get_db_se
         payload={"format": format_name, "created": created, "updated": updated},
     )
     await db.commit()
-    return _redirect("/admin/services", f"Importación completada. Creados: {created}. Actualizados: {updated}.")
+    return _redirect(return_to, f"Importación completada. Creados: {created}. Actualizados: {updated}.")
 
 
 @admin_router.get("/services/export.csv")
@@ -512,18 +557,39 @@ async def export_services_csv(request: Request, db: AsyncSession = Depends(get_d
     buffer = io.StringIO()
     writer = csv.DictWriter(
         buffer,
-        fieldnames=["slug", "name", "category", "description", "base_price", "duration_minutes", "is_active", "source"],
+        fieldnames=[
+            "id",
+            "external_service_id",
+            "slug",
+            "name",
+            "category",
+            "service_type",
+            "description",
+            "base_price",
+            "purchase_price",
+            "duration_minutes",
+            "additional_time_minutes",
+            "tax_percent",
+            "is_active",
+            "source",
+        ],
     )
     writer.writeheader()
     for item in services:
         writer.writerow(
             {
                 "slug": item.slug,
+                "id": str(item.id),
+                "external_service_id": item.external_service_id or "",
                 "name": item.name,
                 "category": item.category,
+                "service_type": item.service_type,
                 "description": item.description or "",
                 "base_price": item.base_price,
+                "purchase_price": item.purchase_price,
                 "duration_minutes": item.duration_minutes,
+                "additional_time_minutes": item.additional_time_minutes,
+                "tax_percent": item.tax_percent,
                 "is_active": item.is_active,
                 "source": item.source,
             }
@@ -548,9 +614,14 @@ async def export_services_json(request: Request, db: AsyncSession = Depends(get_
             "slug": item.slug,
             "name": item.name,
             "category": item.category,
+            "service_type": item.service_type,
+            "external_service_id": item.external_service_id,
             "description": item.description,
             "base_price": item.base_price,
+            "purchase_price": item.purchase_price,
             "duration_minutes": item.duration_minutes,
+            "additional_time_minutes": item.additional_time_minutes,
+            "tax_percent": item.tax_percent,
             "is_active": item.is_active,
             "source": item.source,
         }
@@ -932,8 +1003,13 @@ def _render_page(title: str, body: str, request: Request, current_user: AdminUse
     .toolbar {{ display: flex; gap: 10px; align-items: center; margin-top: 12px; }}
     .toolbar.wrap {{ flex-wrap: wrap; }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 10px; }}
+    .actions-cell {{ min-width: 160px; }}
+    .table-wrap {{ width: 100%; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.55); }}
     table {{ width: 100%; border-collapse: collapse; }}
+    .wide-table {{ min-width: 1600px; }}
     th, td {{ text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }}
+    .mono {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85rem; }}
+    .center {{ text-align: center; }}
     .kv {{ list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }}
     .kv li {{ display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }}
     .inline {{ display: inline; }}
@@ -1111,6 +1187,108 @@ def _slugify(value: str) -> str:
     return cleaned[:120] or "service"
 
 
+def _service_type_options(selected: str, *, allow_blank: bool = True) -> str:
+    options = [
+        ("service", "Servicio"),
+        ("promo", "Promoción"),
+        ("package", "Paquete"),
+        ("extra", "Extra"),
+        ("nail_art", "Nail Art"),
+    ]
+    rendered = "".join(
+        f"<option value='{_e(value)}' {'selected' if value == selected else ''}>{_e(label)}</option>"
+        for value, label in options
+    )
+    if allow_blank:
+        return rendered
+    return rendered
+
+
+def _service_category_options(categories: list[str], selected: str) -> str:
+    return "".join(
+        f"<option value='{_e(category)}' {'selected' if category == selected else ''}>{_e(category)}</option>"
+        for category in categories
+    )
+
+
+def _service_matches_filters(
+    item: ServiceCatalog,
+    *,
+    query: str,
+    category: str,
+    service_type: str,
+) -> bool:
+    if category and item.category != category:
+        return False
+    if service_type and item.service_type != service_type:
+        return False
+    if not query:
+        return True
+    haystack = " ".join(
+        [
+            str(item.id),
+            item.external_service_id or "",
+            item.name,
+            item.slug,
+            item.category,
+            item.service_type,
+            item.description or "",
+        ]
+    ).casefold()
+    return query.casefold() in haystack
+
+
+def _services_return_to(request: Request) -> str:
+    query = request.url.query
+    return "/admin/services" + (f"?{query}" if query else "")
+
+
+def _safe_return_to(value: str) -> str:
+    if value.startswith("/admin/services"):
+        return value
+    return "/admin/services"
+
+
+def _service_row_html(item: ServiceCatalog, session_payload: dict[str, Any], return_to: str) -> str:
+    update_form_id = f"update-service-{item.id}"
+    delete_form_id = f"delete-service-{item.id}"
+    return f"""
+        <tr>
+          <td class="mono">{_e(str(item.id))}</td>
+          <td><input form="{update_form_id}" type="text" name="external_service_id" value="{_e(item.external_service_id or '')}" placeholder="Opcional"></td>
+          <td>
+            <input form="{update_form_id}" type="text" name="name" value="{_e(item.name)}" required>
+            <input form="{update_form_id}" type="hidden" name="slug" value="{_e(item.slug)}">
+          </td>
+          <td><input form="{update_form_id}" type="number" name="base_price" value="{item.base_price}" step="0.01" min="0" required></td>
+          <td><input form="{update_form_id}" type="number" name="duration_minutes" value="{item.duration_minutes}" min="0" required></td>
+          <td><input form="{update_form_id}" type="number" name="purchase_price" value="{item.purchase_price}" step="0.01" min="0" required></td>
+          <td><input form="{update_form_id}" type="number" name="additional_time_minutes" value="{item.additional_time_minutes}" min="0" required></td>
+          <td><input form="{update_form_id}" type="number" name="tax_percent" value="{item.tax_percent}" step="0.01" min="0" required></td>
+          <td><textarea form="{update_form_id}" name="description" rows="2">{_e(item.description or '')}</textarea></td>
+          <td><input form="{update_form_id}" type="text" name="category" value="{_e(item.category)}" required></td>
+          <td>
+            <select form="{update_form_id}" name="service_type">
+              {_service_type_options(item.service_type)}
+            </select>
+          </td>
+          <td class="center"><input form="{update_form_id}" type="checkbox" name="is_active" {'checked' if item.is_active else ''}></td>
+          <td class="actions-cell">
+            <button form="{update_form_id}" type="submit">Guardar</button>
+            <button form="{delete_form_id}" type="submit" class="danger ghost">Eliminar</button>
+            <form id="{update_form_id}" method="post" action="/admin/services/{item.id}">
+              {_csrf_input(session_payload)}
+              <input type="hidden" name="return_to" value="{_e(return_to)}">
+            </form>
+            <form id="{delete_form_id}" method="post" action="/admin/services/{item.id}/delete">
+              {_csrf_input(session_payload)}
+              <input type="hidden" name="return_to" value="{_e(return_to)}">
+            </form>
+          </td>
+        </tr>
+    """
+
+
 def _validate_password_strength(password: str, confirmation: str) -> str | None:
     if password != confirmation:
         return "La confirmación no coincide."
@@ -1132,20 +1310,29 @@ def _parse_service_payload(data: dict[str, str], *, import_mode: bool = False) -
     slug = _slugify(data.get("slug", "").strip() or name)
     try:
         base_price = float(str(data.get("base_price", "0")).strip())
+        purchase_price = float(str(data.get("purchase_price", "0")).strip())
         duration_minutes = int(float(str(data.get("duration_minutes", "0")).strip()))
+        additional_time_minutes = int(float(str(data.get("additional_time_minutes", "0")).strip()))
+        tax_percent = float(str(data.get("tax_percent", "0")).strip())
     except ValueError:
         return "Precio o duración inválidos.", {}
-    if base_price < 0 or duration_minutes < 0:
-        return "Precio y duración deben ser positivos.", {}
+    if base_price < 0 or purchase_price < 0 or duration_minutes < 0 or additional_time_minutes < 0 or tax_percent < 0:
+        return "Precio, impuestos y tiempos deben ser positivos.", {}
     active_raw = str(data.get("is_active", "true")).strip().casefold()
     is_active = active_raw in {"1", "true", "yes", "si", "sí", "on"}
+    service_type = data.get("service_type", "service").strip() or "service"
     payload = {
         "slug": slug,
         "name": name,
         "category": data.get("category", "General").strip() or "General",
+        "service_type": service_type,
+        "external_service_id": data.get("external_service_id", "").strip() or None,
         "description": data.get("description", "").strip() or None,
         "base_price": base_price,
+        "purchase_price": purchase_price,
         "duration_minutes": duration_minutes,
+        "additional_time_minutes": additional_time_minutes,
+        "tax_percent": tax_percent,
         "is_active": is_active,
     }
     if import_mode:

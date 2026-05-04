@@ -59,6 +59,18 @@ async def init_db() -> None:
                 """
             )
         )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS service_catalog
+                ADD COLUMN IF NOT EXISTS service_type VARCHAR(40) DEFAULT 'service',
+                ADD COLUMN IF NOT EXISTS external_service_id VARCHAR(120),
+                ADD COLUMN IF NOT EXISTS purchase_price DOUBLE PRECISION DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS additional_time_minutes INTEGER DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS tax_percent DOUBLE PRECISION DEFAULT 0
+                """
+            )
+        )
 
 
 async def close_db() -> None:
