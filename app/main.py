@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin import admin_router, bootstrap_admin_user
 from app.business_rules import human_handover_reply, needs_human_handover
+from app.catalog_sync import sync_service_catalog_from_docs
 from app.config import Settings, get_settings
 from app.database import AsyncSessionLocal, close_db, init_db
 from app.evolution import send_text_message
@@ -194,6 +195,8 @@ async def startup() -> None:
     )
     await init_db()
     await bootstrap_admin_user()
+    async with AsyncSessionLocal() as db:
+        await sync_service_catalog_from_docs(db, only_if_empty=True)
     app.state.janitor_task = asyncio.create_task(
         janitor_loop(settings.janitor_interval_seconds)
     )

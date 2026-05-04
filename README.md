@@ -49,6 +49,7 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Protección básica contra prompt injection en texto y audio
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
+- Panel admin `/admin` con siembra inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` cuando la tabla está vacía
 
 ## Estructura
 
@@ -451,6 +452,5 @@ Suite focalizada actual:
 ```text
 78 passed
 ```
-
 
 

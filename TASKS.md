@@ -165,6 +165,7 @@ Interfaz interna para controlar catálogo, CRM, vistas crudas de datos y accione
 - [x] CRUD básico de `service_catalog`.
 - [x] Exportación de catálogo a `CSV` y `JSON`.
 - [x] Importación de catálogo por pegado de `CSV` o `JSON`.
+- [x] Carga inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` si la tabla está vacía.
 - [x] Vista CRM cruda con detalle por contacto.
 - [x] Explorador controlado de tablas clave.
 - [x] Acciones operativas: pausa global, pausa de follow-ups, limpieza de runtime y recarga de docs.
@@ -175,4 +176,5 @@ Interfaz interna para controlar catálogo, CRM, vistas crudas de datos y accione
 - La UI es server-rendered y prioriza operación interna sobre complejidad frontend.
 - El bootstrap del admin inicial requiere `ADMIN_BOOTSTRAP_PASSWORD` en entorno; la cuenta queda marcada para rotación obligatoria en primer login.
 - La importación de catálogo en v1 se hace pegando el contenido `CSV` o `JSON` en la UI, evitando dependencias extra de upload.
+- Existe además una sincronización desde `docs/knowledge_base.md` y `docs/promos.md` para poblar o refrescar servicios documentados.
 - La vista DB es intencionalmente de solo lectura en esta versión.
