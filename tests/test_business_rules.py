@@ -61,6 +61,8 @@ from app.main import (
     _should_handle_in_test_mode,
     _should_export_test_session_for_number,
     _is_supported_message_event,
+    _runtime_v2_media_metadata,
+    _should_run_runtime_v2_shadow,
     _technical_fallback_reply,
     _webhook_dedupe_key,
     ConversationBuffer,
@@ -125,6 +127,40 @@ def test_test_session_export_includes_admin_even_if_not_allowlisted() -> None:
     )()
 
     assert _should_export_test_session_for_number("5218441112233@s.whatsapp.net", settings)
+
+
+def test_runtime_v2_shadow_requires_enabled_and_shadow_flags() -> None:
+    enabled = type(
+        "Settings",
+        (),
+        {"bot_runtime_v2_enabled": True, "bot_runtime_v2_shadow_mode": True},
+    )()
+    disabled = type(
+        "Settings",
+        (),
+        {"bot_runtime_v2_enabled": True, "bot_runtime_v2_shadow_mode": False},
+    )()
+
+    assert _should_run_runtime_v2_shadow(enabled)
+    assert not _should_run_runtime_v2_shadow(disabled)
+
+
+def test_runtime_v2_media_metadata_omits_none_values() -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218441112233@s.whatsapp.net",
+        message="Te mando captura",
+        messageType="imageMessage",
+        mediaMimetype="image/jpeg",
+        hasMedia=True,
+    )
+
+    metadata = _runtime_v2_media_metadata(payload)
+
+    assert metadata == {
+        "message_type": "imageMessage",
+        "media_mimetype": "image/jpeg",
+        "has_media": True,
+    }
 
 
 def test_human_handover_marker_is_detected() -> None:

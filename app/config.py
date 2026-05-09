@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     memory_delete_trigger: str = "dipiridú"
     rate_limit_max_requests: int = 20
     rate_limit_window_seconds: int = 60
-    follow_up_delay_seconds: int = 600
+    follow_up_delay_seconds: int = 900
     janitor_interval_seconds: int = 86_400
     test_mode_enabled: bool = False
     test_mode_allowed_numbers: str = ""

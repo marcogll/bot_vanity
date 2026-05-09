@@ -28,8 +28,9 @@ Debe comportarse como una recepcionista que:
 3. pedir el siguiente dato más útil
 4. acotar servicio
 5. aclarar variables que cambian recomendación o precio
-6. orientar a agendamiento si ya hay suficiente contexto
-7. validar confirmación, captura o comprobante
+6. si aplica, enviar app links y liga de booking con resumen del servicio
+7. programar follow-up de booking a los 15 minutos
+8. validar confirmación, captura o comprobante
 
 ## Estados principales
 
@@ -120,22 +121,20 @@ Ejemplo:
 
 ### 6. Después del retiro
 
-Si el subtipo es:
-
-- extensión / gelish / acrílicas / soft gel
-
 Acción:
 
-- preguntar si lo busca tono liso o con diseño
+- preguntar si tiene algo en mente, como tono liso, diseño o técnica preferida
+- no mandar liga todavía si falta esta variable
 
-Si el subtipo es:
+Ejemplo:
 
-- manicure / pedicure / combo
+`Perfecto 💗 ¿Tiene algo en mente, como tono liso, algún diseño o técnica preferida?`
 
-Acción:
+Notas:
 
-- preguntar nivel de servicio o resultado esperado
-- por ejemplo si lo busca algo más sencillo o más completo
+- si responde `tono liso`, usar esa variable para el resumen
+- si pide diseño complejo o referencia visual, puede requerir cotización humana o foto
+- si la respuesta no es clara, hacer una sola pregunta de aclaración
 
 ### 7. Ya hay contexto suficiente para orientar booking
 
@@ -150,10 +149,32 @@ Cuando ya sabe:
 
 Acción:
 
-- recomendar siguiente paso
-- si el cierre real depende de autoservicio, mandar liga de booking
-- explicar breve
-- después validar si sí pudo agendar
+- mandar links de app iOS/Android para quien no tenga Fresha
+- mandar liga oficial de booking
+- explicar qué debe buscar/agendar con un resumen breve
+- pedir captura de confirmación al terminar
+
+Ejemplo:
+
+`Perfecto 💗 En Fresha vas a agendar: Retiro de Gel/Acrílico - Gelish - tono liso.`
+
+Después:
+
+- `iPhone: {ios_app_store_url}`
+- `Android: {android_play_store_url}`
+- `Liga de booking: {booking_url}`
+- pedir captura de confirmación
+
+### 7.1 Follow-up después de booking
+
+Después de mandar la liga de booking, Sofía agenda un follow-up a los 15 minutos.
+
+Acción:
+
+- preguntar si pudo elegir horario
+- no mandar follow-up si ya envió captura, comprobante o confirmación
+- no mandar follow-up si ya hay cita completada o pendiente con comprobante
+- no mandar follow-up si follow-ups están pausados desde admin
 
 ### 8. Captura de cita o comprobante
 
@@ -188,6 +209,24 @@ No hacer:
 - dar catálogo
 
 ### 10. Handover humano
+
+Se activa si:
+
+- el cliente pide hablar con una persona
+- el cliente menciona una queja fuerte
+- el caso requiere autoridad real de recepción
+
+Acción:
+
+- responder que se pausará el flujo automático
+- notificar a admins configurados por WhatsApp
+- no seguir con booking ni catálogo
+- no contradecir a recepción si luego interviene
+
+Variables relacionadas:
+
+- `ADMIN_PHONE_NUMBER`
+- `ADMIN_PHONE_NUMBERS`
 
 Si ya intervino recepción humana:
 
@@ -248,6 +287,18 @@ Sofía sí debe:
 - acotar servicio
 - redirigir a booking cuando aplica
 - validar confirmación si la clienta ya lo hizo
+
+## Implementación actual
+
+Reglas locales antes del LLM:
+
+- `app/conversation/booking_flow.py`
+- `app/conversation/state.py`
+- `app/conversation/memory.py`
+- `app/conversation/policy_engine.py`
+- `app/conversation/prompt_builder.py`
+
+El LLM sigue redactando casos abiertos, pero el flujo crítico de booking, silencio, handover y estado se está moviendo a módulos determinísticos.
 
 ## Criterios de éxito
 

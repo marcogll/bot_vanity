@@ -14,25 +14,13 @@
   <img src="https://img.shields.io/badge/OpenAI-3a3a3a?style=flat-square&logo=openai&logoColor=white" alt="OpenAI">
   <img src="https://img.shields.io/badge/PostgreSQL-3a3a3a?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
   <img src="https://img.shields.io/badge/Python-3a3a3a?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Telegram-3a3a3a?style=flat-square&logo=telegram&logoColor=white" alt="Telegram">
-</p>
-
-  Bot automatizado para operaciones 🤖
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Docker-3a3a3a?style=flat-square&logo=docker&logoColor=white" alt="Docker">
-  <img src="https://img.shields.io/badge/FastAPI-3a3a3a?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/OpenAI-3a3a3a?style=flat-square&logo=openai&logoColor=white" alt="OpenAI">
-  <img src="https://img.shields.io/badge/PostgreSQL-3a3a3a?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Python-3a3a3a?style=flat-square&logo=python&logoColor=white" alt="Python">
 </p>
 
 ## Resumen
 
 Sofía atiende mensajes de WhatsApp para Vanity Nail Salon. El sistema responde consultas, guía al agendamiento en Fresha, valida capturas y comprobantes, y prioriza la intervención humana cuando corresponde.
 
-El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_interactions/messaging_selfimp.md](/home/marco/Work/code/bot_vanity/whatsapp_interactions/messaging_selfimp.md), con foco en:
+El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_interactions/messaging_selfimp.md](whatsapp_interactions/messaging_selfimp.md), con foco en:
 
 - no reiniciar conversaciones avanzadas
 - no pedir nombre ciegamente
@@ -50,15 +38,30 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
 - Panel admin `/admin` con siembra inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` cuando la tabla está vacía
+- Runtime V2 en shadow mode para clasificar, decidir, planear respuesta y mezclar roles sin cambiar todavía la respuesta enviada
+- Flujo estructurado de booking antes del LLM para nombre, servicio, retiro, diseño/técnica, links de app y liga de booking
+- Escalación por WhatsApp a admins configurados cuando el usuario pide humano o hay queja
 
 ## Estructura
 
 ```text
 app/
   main.py                  webhook, orquestación, follow-ups, modo test
+  bots/runtime.py          Runtime V2 en shadow mode
+  channels/whatsapp.py     payload y parsing de Evolution/WhatsApp
+  conversation/
+    booking_flow.py        flujo local de booking antes del LLM
+    memory.py              buffer conversacional temporal
+    policy_engine.py       decisión mínima antes del LLM
+    prompt_builder.py      armado de mensajes y contexto para el LLM
+    state.py               derivación pura de estado conversacional
   knowledge_engine.py      system prompt + docs Markdown
   business_rules.py        reglas determinísticas
   models.py                interacciones, memoria, citas, webhook events
+  roles/blender.py         mezcla de roles frontdesk/manager/staff1
+  tenants/                 modelos y loader de tenants
+tenants/
+  vanity/business.json     configuración versionada del tenant Vanity
 docs/
   system_prompt.md
   knowledge_base.md
@@ -68,7 +71,7 @@ docs/
 whatsapp_interactions/
   messaging_selfimp.md
 tests/
-  test_business_rules.py
+  test_*.py
 ```
 
 ## Setup local
@@ -90,7 +93,7 @@ Si no activas el virtualenv:
 
 ## Variables de entorno
 
-Parte de [`.env.example`](/home/marco/Work/code/bot_vanity/.env.example) y ajusta valores reales.
+Parte de [`.env.example`](.env.example) y ajusta valores reales.
 
 Variables críticas:
 
@@ -103,10 +106,14 @@ Variables críticas:
 - `EVOLUTION_INSTANCE_NAME`
 - `BOOKING_URL`
 - `PAYMENT_URL`
+- `IOS_APP_STORE_URL`
+- `ANDROID_PLAY_STORE_URL`
 
 Variables del panel admin:
 
 - `ADMIN_WEBUI_ENABLED=true`
+- `ADMIN_PHONE_NUMBER=528441026472`
+- `ADMIN_PHONE_NUMBERS=528441026472,528445047771`
 - `ADMIN_BOOTSTRAP_USERNAME=admin`
 - `ADMIN_BOOTSTRAP_PASSWORD=<password fuerte temporal>`
 - `ADMIN_SESSION_SECRET=<secreto largo aleatorio>`
@@ -117,6 +124,7 @@ Variables del panel admin:
 Notas:
 
 - `ADMIN_BOOTSTRAP_PASSWORD` solo se usa para sembrar el primer admin si no existe.
+- `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS` autorizan comandos administrativos y reciben notificaciones de escalación por WhatsApp.
 - `ADMIN_SESSION_SECRET` debe ser distinto a `WEBHOOK_SECRET`.
 - el password se guarda hasheado en DB, no reversible
 - en el primer login el panel obliga a rotar ese password temporal
@@ -162,6 +170,41 @@ Payload exportado:
 - `pending_booking`
 - `completed_booking`
 
+## Runtime V2 y Shadow Mode
+
+Esta rama avanza el refactor `Sofia Role Runtime` de forma incremental. El Runtime V2 puede ejecutarse en paralelo con V1 para observar decisiones sin cambiar el mensaje que recibe la clienta.
+
+```env
+BOT_RUNTIME_V2_ENABLED=false
+BOT_RUNTIME_V2_SHADOW_MODE=false
+ROLE_BLEND_ENABLED=false
+TENANT_CONFIG_PATH=tenants
+DEFAULT_TENANT_ID=vanity
+```
+
+Comportamiento:
+
+- con `BOT_RUNTIME_V2_ENABLED=true` y `BOT_RUNTIME_V2_SHADOW_MODE=true`, V2 evalúa contexto, intención, política, plan de respuesta y roles
+- V1 sigue enviando la respuesta real
+- V2 solo escribe logs `Runtime V2 shadow: ...`
+- `ROLE_BLEND_ENABLED=true` activa mezcla de `frontdesk`, `manager` y `staff1` según estado conversacional
+
+Módulos principales:
+
+- [app/bots/runtime.py](app/bots/runtime.py)
+- [app/channels/whatsapp.py](app/channels/whatsapp.py)
+- [app/conversation/models.py](app/conversation/models.py)
+- [app/conversation/policy_engine.py](app/conversation/policy_engine.py)
+- [app/conversation/prompt_builder.py](app/conversation/prompt_builder.py)
+- [app/roles/blender.py](app/roles/blender.py)
+- [tenants/vanity/business.json](tenants/vanity/business.json)
+
+Documentación de este branch:
+
+- [docs/refactor_status.md](docs/refactor_status.md)
+- [docs/testing_runtime_v2.md](docs/testing_runtime_v2.md)
+- [docs/operations_runtime_v2.md](docs/operations_runtime_v2.md)
+
 ## Reglas conversacionales
 
 Sofía no debe copiar la autoridad operativa de recepción humana. Su rol es:
@@ -174,15 +217,15 @@ Sofía no debe copiar la autoridad operativa de recepción humana. Su rol es:
 
 El estilo objetivo viene de chats reales documentados en:
 
-- [messaging_selfimp.md](/home/marco/Work/code/bot_vanity/whatsapp_interactions/messaging_selfimp.md)
-- [docs/system_prompt.md](/home/marco/Work/code/bot_vanity/docs/system_prompt.md)
-- [docs/conversation_flow.md](/home/marco/Work/code/bot_vanity/docs/conversation_flow.md)
+- [messaging_selfimp.md](whatsapp_interactions/messaging_selfimp.md)
+- [docs/system_prompt.md](docs/system_prompt.md)
+- [docs/conversation_flow.md](docs/conversation_flow.md)
 
 ## Diagrama conversacional
 
 La lógica conversacional ya no debe sentirse como script lineal. La referencia formal por estados y escenarios está en:
 
-- [docs/conversation_flow.md](/home/marco/Work/code/bot_vanity/docs/conversation_flow.md)
+- [docs/conversation_flow.md](docs/conversation_flow.md)
 
 Resumen corto:
 
@@ -196,11 +239,15 @@ Resumen corto:
    primero acotar subtipo
 5. si responde subtipo:
    luego preguntar retiro como aclaración natural
-6. ya con suficiente contexto:
-   orientar o mandar booking
-7. si llega captura/comprobante:
+6. después de retiro:
+   preguntar si tiene tono liso, diseño o técnica preferida
+7. ya con suficiente contexto:
+   mandar app links y liga de booking con resumen tipo `vas a agendar: Retiro de Gel/Acrílico - Gelish - tono liso`
+8. 15 minutos después del booking:
+   preguntar si pudo elegir horario, salvo que ya haya mandado captura/comprobante
+9. si llega captura/comprobante:
    validar, no volver a onboarding
-8. si ya respondió humana:
+10. si ya respondió humana:
    no duplicar ni reabrir flujo
 
 Escenarios que deben sentirse naturales:
@@ -222,6 +269,10 @@ La memoria ya no se usa abierta indefinidamente.
 
 Esto evita que retome temas viejos sin relación con el request actual.
 
+El buffer conversacional temporal vive en [app/conversation/memory.py](app/conversation/memory.py). Guarda señales de corto plazo como nombre detectado, servicio, tercero, último mensaje del usuario, última respuesta de Sofía y estado conversacional reciente.
+
+El buffer se usa para dar continuidad al prompt y a reglas locales, pero no reemplaza la memoria persistente cifrada.
+
 ## Seguridad y robustez
 
 - cifrado Fernet para contenido sensible
@@ -237,6 +288,7 @@ El trigger administrativo se configura por env:
 
 ```env
 ADMIN_PHONE_NUMBER=528441026472
+ADMIN_PHONE_NUMBERS=528441026472,528445047771
 MEMORY_DELETE_TRIGGER=dipiridú
 ```
 
@@ -251,6 +303,17 @@ Si luego necesitas más de un admin, también existe:
 ```env
 ADMIN_PHONE_NUMBERS=528441026472,528445047771
 ```
+
+## Escalación Humana
+
+Cuando el usuario pide hablar con una persona o se detecta queja fuerte, Sofía:
+
+- responde que pausará el flujo automático
+- persiste la interacción
+- programa notificación WhatsApp a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`
+- conserva el estado para evitar que el bot contradiga a recepción
+
+La notificación incluye nombre de WhatsApp, `remote_jid`, sender y el mensaje que detonó la escalación.
 
 ## Docker
 
@@ -440,17 +503,25 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 
 ## Documentos clave
 
-- [PRD.md](/home/marco/Work/code/bot_vanity/PRD.md)
-- [TASKS.md](/home/marco/Work/code/bot_vanity/TASKS.md)
-- [CHANGELOG.md](/home/marco/Work/code/bot_vanity/CHANGELOG.md)
-- [docs/evolution_api_latency_guide.md](/home/marco/Work/code/bot_vanity/docs/evolution_api_latency_guide.md)
+- [PRD.md](PRD.md)
+- [TASKS.md](TASKS.md)
+- [CHANGELOG.md](CHANGELOG.md)
+- [docs/sofia_role_runtime_refactor_plan.md](docs/sofia_role_runtime_refactor_plan.md)
+- [docs/refactor_status.md](docs/refactor_status.md)
+- [docs/testing_runtime_v2.md](docs/testing_runtime_v2.md)
+- [docs/operations_runtime_v2.md](docs/operations_runtime_v2.md)
+- [docs/evolution_api_latency_guide.md](docs/evolution_api_latency_guide.md)
 
 ## Estado de pruebas
 
-Suite focalizada actual:
+Suite actual:
 
 ```text
-78 passed
+124 passed
 ```
 
+Comando usado en esta rama:
 
+```bash
+env OPENAI_API_KEY=test DATABASE_URL=postgresql+asyncpg://user:pass@localhost/test AES_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= WEBHOOK_SECRET=test .venv/bin/python -m pytest
+```

@@ -1,5 +1,42 @@
 # Changelog
 
+## 2026-05-09
+
+### Refactor Sofia Role Runtime
+
+- Se agregaron modelos de tenant, negocio, bot y roles.
+- Se creó configuración versionada para `vanity` en `tenants/vanity/business.json`.
+- Se agregó `RoleBlender` con pesos por estado conversacional.
+- Se agregaron contratos puros de conversación, decisiones, acciones y planes.
+- Se agregó `PolicyEngine` mínimo para silencio, handover, prompt injection, dato faltante y fallback a LLM.
+- Se agregó `BotRuntimeV2` con shadow mode detrás de flags.
+- Se extrajo derivación de estado a `app/conversation/state.py`.
+- Se extrajo buffer conversacional temporal a `app/conversation/memory.py`.
+- Se agregó flujo local de booking en `app/conversation/booking_flow.py`.
+- Se extrajo parsing puro de canal WhatsApp a `app/channels/whatsapp.py`.
+- Se movió `EvolutionWebhookPayload` al adaptador `app/channels/whatsapp.py`.
+- Se renombró el generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
+
+### Booking y escalación
+
+- El flujo estructurado pregunta servicio, subtipo, retiro y diseño/técnica antes de mandar booking.
+- El cierre de booking incluye links de app iOS/Android, liga de booking y resumen `vas a agendar: ...`.
+- El follow-up de booking queda en 15 minutos por defecto (`FOLLOW_UP_DELAY_SECONDS=900`).
+- Las escalaciones humanas notifican por WhatsApp a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
+
+### Documentación
+
+- Se actualizó `README.md` para el estado del branch.
+- Se actualizó `.env.example` con flags V2, admins múltiples y follow-up de 15 minutos.
+- Se agregó `docs/refactor_status.md`.
+- Se agregó `docs/testing_runtime_v2.md`.
+- Se agregó `docs/operations_runtime_v2.md`.
+- Se actualizó `docs/conversation_flow.md`.
+
+### Validación
+
+- Suite completa: `124 passed, 4 warnings`.
+
 ## 2026-05-01
 
 ### Conversación de Sofía

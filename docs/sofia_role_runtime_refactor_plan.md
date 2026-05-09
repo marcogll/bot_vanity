@@ -1,5 +1,14 @@
 # Plan de Refactor: Sofia Role Runtime
 
+## Estado de este branch
+
+Este documento conserva el plan maestro. El estado implementado, la guía de pruebas y la operación del branch actual viven en:
+
+- `docs/refactor_status.md`
+- `docs/testing_runtime_v2.md`
+- `docs/operations_runtime_v2.md`
+- `README.md`
+
 ## Objetivo
 
 Convertir Sofia en un asistente operacional configurable y replicable para otros negocios, capaz de actuar como una combinacion controlada de:
