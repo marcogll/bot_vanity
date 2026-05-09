@@ -18,6 +18,84 @@ Este documento resume patrones detectados en los chats analizados de:
 - `+52 222 109 6481.txt`
 - `+52 844 677 2032.txt`
 
+## Chats analizados adicionales (tercer lote)
+
+Se añaden 62 chats nuevos del folder `whatsapp_interactions/chats`:
+
+- `WhatsApp Chat - Fabi Narro.txt`
+- `WhatsApp Chat - Karla Bravo.txt`
+- `WhatsApp Chat - Anahi Ruiz.txt`
+- `WhatsApp Chat - +52 844 496 9916.txt`
+- `WhatsApp Chat - Sofia Valdez.txt`
+- `WhatsApp Chat - +52 844 120 5904.txt`
+- `WhatsApp Chat - Idalia Margarita.txt`
+- `WhatsApp Chat - Karina Rodriguez 2.txt`
+- `WhatsApp Chat - Vanessa De La Fuente.txt`
+- `WhatsApp Chat - Alejandra Martinez.txt`
+- `WhatsApp Chat - Melva Puente.txt`
+- `WhatsApp Chat - Viridiana Guzman.txt`
+- `WhatsApp Chat - Claudia Lopez.txt`
+- `WhatsApp Chat - Sofia Ramos.txt`
+- `WhatsApp Chat - Michel Montiel.txt`
+- `WhatsApp Chat - Carmen Moncada Calderon.txt`
+- `WhatsApp Chat - +52 844 880 6881.txt`
+- `WhatsApp Chat - Monse Montañez.txt`
+- `WhatsApp Chat - Cristina Peart.txt`
+- `WhatsApp Chat - Laura Saldivar.txt`
+- `WhatsApp Chat - Yesica Robles.txt`
+- `WhatsApp Chat - Lucia Cuellar.txt`
+- `WhatsApp Chat - Erika Cano.txt`
+- `WhatsApp Chat - Gabriela Perez.txt`
+- `WhatsApp Chat - Cristina Niño.txt`
+- `WhatsApp Chat - +52 844 105 2246.txt`
+- `WhatsApp Chat - +52 228 184 1348.txt`
+- `WhatsApp Chat - Dalia paez.txt`
+- `WhatsApp Chat - Camila Lopez.txt`
+- `WhatsApp Chat - Lupita Monreal.txt`
+- `WhatsApp Chat - Areli Sorchini.txt`
+- `WhatsApp Chat - Valeria garcia.txt`
+- `WhatsApp Chat - Claudia Rodriguez.txt`
+- `WhatsApp Chat - +52 844 391 8189.txt`
+- `WhatsApp Chat - Mayra Longoria.txt`
+- `WhatsApp Chat - Eunice Valenzuela.txt`
+- `WhatsApp Chat - Martha Valdes (mamá De Paulina Rosales).txt`
+- `WhatsApp Chat - Lissa Hernandez.txt`
+- `WhatsApp Chat - Maria Luisa Contreras.txt`
+- `WhatsApp Chat - Daniela Muñoz.txt`
+- `WhatsApp Chat - +52 844 676 3385.txt`
+- `WhatsApp Chat - Aida Renata.txt`
+- `WhatsApp Chat - Liliana Arellano.txt`
+- `WhatsApp Chat - Isabel.txt`
+- `WhatsApp Chat - Juana Maria Chavez Covarrubias.txt`
+- `WhatsApp Chat - Claudia Ibarra.txt`
+- `WhatsApp Chat - Nayeli Delagado.txt`
+- `WhatsApp Chat - Yanet Reyes.txt`
+- `WhatsApp Chat - Arcelia Vazquez.txt`
+- `WhatsApp Chat - Diana Ramos.txt`
+- `WhatsApp Chat - Maria Dolores.txt`
+- `WhatsApp Chat - Karina Sanchez.txt`
+- `WhatsApp Chat - +52 844 228 2981.txt`
+- `WhatsApp Chat - Jennifer Betancourt.txt`
+- `WhatsApp Chat - +52 844 178 0406.txt`
+- `WhatsApp Chat - Ing. Norely Aguero.txt`
+- `WhatsApp Chat - Karina Rodriguez.txt`
+- `WhatsApp Chat - +52 844 225 2276.txt`
+- `WhatsApp Chat - +52 844 327 5925.txt`
+- `WhatsApp Chat - +52 664 330 0608.txt`
+- `WhatsApp Chat - Lilia Garcia.txt`
+- `WhatsApp Chat - Reyna Magallanes.txt`
+- `WhatsApp Chat - Andrea Sorchini.txt`
+- `WhatsApp Chat - Gaby Moncada.txt`
+- `WhatsApp Chat - Mayra Garcia.txt`
+- `WhatsApp Chat - +52 844 358 8940.txt`
+- `WhatsApp Chat - Sheila.txt`
+- `WhatsApp Chat - Natalia Jimenez.txt`
+- `WhatsApp Chat - Vanesa Perez.txt`
+- `WhatsApp Chat - +52 868 198 4567.txt`
+- `WhatsApp Chat - Andrea Plata.txt`
+- `WhatsApp Chat - Maria Luisa Cerda.txt`
+- `WhatsApp Chat - Myriam Mendoza.txt`
+
 Se pone especial énfasis en:
 
 - Interacciones donde Sofía respondió mal o interrumpió flujos ya activos.
@@ -729,3 +807,29 @@ Debe:
 - priorizar resolución cuando haya problema, urgencia o confusión
 
 Si Sofía duda, debe pausar y confirmar; nunca improvisar.
+
+## Hallazgos del tercer lote (chats nuevos)
+
+Los 62 chats añadidos del folder `whatsapp_interactions/chats` confirman patrones previos y aportan nuevas observaciones:
+
+### 1. Latencia persistente
+Al igual que en el incidente de abril 2026, múltiples chats nuevos muestran retrasos de 1-3 horas entre mensaje del cliente y respuesta humana (ej. Alejandra Martinez 17/02: 1h de retraso; Aida Renata 05/05: 2.5h para cotización).
+
+### 2. Estilo de atención humana (agente CARRANZA)
+El agente "Vanity Nail Salon (CARRANZA)" (presente en la mayoría de los chats nuevos) sigue las mismas buenas prácticas que staff1:
+- Mensajes cortos (1-2 líneas)
+- Uso moderado de emojis (💗, ☺️, 🙏🏻)
+- No reinicia conversaciones con clientas frecuentes
+- Confirma con fecha, hora, servicio y sucursal
+
+### 3. Redundancia de auto-reply
+El mensaje automático con link de Fresha se envía incluso cuando el agente humano va a responder manualmente (ej. Alejandra Martinez 01/04, 28/04; Aida Renata 20/04). Esto causa repetición innecesaria cuando la cita ya se resolverá por chat.
+
+### 4. Manejo de incidencias y pagos
+Chats como Aida Renata muestran que el agente humano maneja problemas de depósitos a cuentas canceladas con:
+- Empatía y transparencia
+- Seguimiento activo (llamadas al banco)
+- Resolución en el mismo hilo sin derivar a la app
+
+### 5. Confirmación post-agendamiento
+El agente envía confirmación consistente con los datos de la cita, alineado a las reglas operativas existentes (sección 5 de Reglas operativas).
