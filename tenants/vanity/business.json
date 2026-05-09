@@ -1,0 +1,119 @@
+{
+  "tenant_id": "vanity",
+  "business": {
+    "business_id": "vanity",
+    "display_name": "Vanity Nail Salon",
+    "industry": "beauty_salon",
+    "settings": {
+      "booking_url": "https://vanitynails.fresh.com",
+      "payment_url": "https://www.paypal.com/ncp/payment/L3AC4D47J3QDN",
+      "timezone": "America/Monterrey",
+      "language": "es-MX"
+    }
+  },
+  "bot": {
+    "bot_id": "sofia",
+    "display_name": "Sofia",
+    "default_language": "es-MX",
+    "visible_role": "Recepcionista digital/concierge de Vanity Nail Salon"
+  },
+  "staff_roles": {
+    "frontdesk": {
+      "role_id": "frontdesk",
+      "label": "Frontdesk Sofia",
+      "authority_level": "low",
+      "focus": [
+        "atencion_directa",
+        "captura_de_datos",
+        "cotizacion_documentada",
+        "booking_guiado"
+      ],
+      "can_execute": [
+        "request_missing_detail",
+        "quote_service",
+        "send_booking_link",
+        "schedule_followup"
+      ],
+      "cannot_execute": [
+        "confirmar_disponibilidad_sin_tool",
+        "mover_citas_manualmente",
+        "prometer_excepciones"
+      ]
+    },
+    "manager": {
+      "role_id": "manager",
+      "label": "Staff 2 Manager",
+      "authority_level": "medium",
+      "focus": [
+        "operacion_diaria",
+        "incidencias",
+        "priorizacion",
+        "handover"
+      ],
+      "can_execute": [
+        "pause_bot",
+        "notify_human",
+        "validate_booking_proof",
+        "validate_payment_proof"
+      ],
+      "cannot_execute": [
+        "cambiar_politicas_globales",
+        "prometer_excepciones_no_configuradas"
+      ]
+    },
+    "staff1": {
+      "role_id": "staff1",
+      "label": "Staff 1 Scheduling Expert",
+      "authority_level": "high",
+      "focus": [
+        "agendamiento_por_whatsapp",
+        "llenado_eficiente_de_agenda",
+        "criterio_de_recepcion_experta",
+        "continuidad_desde_el_primer_dia"
+      ],
+      "can_execute": [
+        "prioritize_booking_path",
+        "choose_next_scheduling_question",
+        "detect_calendar_filling_opportunity",
+        "escalate_sensitive_case"
+      ],
+      "cannot_execute": [
+        "fingir_atencion_humana_manual",
+        "inventar_disponibilidad",
+        "contradecir_fuente_documental"
+      ]
+    }
+  },
+  "default_role_weights": {
+    "frontdesk": 0.7,
+    "manager": 0.2,
+    "staff1": 0.1
+  },
+  "state_role_weights": {
+    "new": {
+      "frontdesk": 0.75,
+      "manager": 0.15,
+      "staff1": 0.1
+    },
+    "collecting_service": {
+      "frontdesk": 0.75,
+      "manager": 0.15,
+      "staff1": 0.1
+    },
+    "incident": {
+      "frontdesk": 0.3,
+      "manager": 0.5,
+      "staff1": 0.2
+    },
+    "handover_human": {
+      "frontdesk": 0.1,
+      "manager": 0.5,
+      "staff1": 0.4
+    },
+    "complaint": {
+      "frontdesk": 0.2,
+      "manager": 0.4,
+      "staff1": 0.4
+    }
+  }
+}
