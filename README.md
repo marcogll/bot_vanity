@@ -64,6 +64,7 @@ app/
     booking.py             follow-up y reglas operativas de booking
     notifications.py       notificaciones de handover/escalación
     proofs.py              modelos y mensajes de capturas/comprobantes
+    vision.py              análisis visual estructurado con OpenAI
 tenants/
   vanity/business.json     configuración versionada del tenant Vanity
 docs/
@@ -521,7 +522,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-133 passed
+137 passed
 ```
 
 Comando usado en esta rama:
