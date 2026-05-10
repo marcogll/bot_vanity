@@ -38,6 +38,7 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - `tenant_id` persistido en historial, memoria, citas y eventos webhook.
 - Comparación V1/V2 registrada en shadow mode con estado, intención, acción y alineación.
 - Runtime V2 puede tomar control limitado con allowlist para decisiones determinísticas.
+- Comando admin `dipirdu -rf`/`dipiridú -rf` agregado con confirmación exacta para borrar toda la base.
 - Generador principal consolidado como `generate_assistant_reply`.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
@@ -99,8 +100,10 @@ El flujo local antes del LLM cubre:
 2. detección de servicio.
 3. para uñas/manicure/pedicure, pregunta por retiro.
 4. después de retiro, pregunta por tono liso, diseño o técnica.
-5. envía links de app y liga de booking con resumen `vas a agendar: ...`.
-6. programa follow-up después de 15 minutos si no hay captura/comprobante.
+5. pregunta si ya tiene app/cuenta Fresha; si no, manda links de app y espera confirmación.
+6. cuando ya tiene app/cuenta, envía liga de booking con resumen `vas a reservar: ...`.
+7. programa follow-up después de 15 minutos si no hay captura/comprobante.
+8. no consulta ni confirma disponibilidad; guía a Fresha para elegir horario real.
 
 ## Escalación humana
 
@@ -116,7 +119,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-146 passed, 4 warnings
+153 passed, 4 warnings
 ```
 
 Comando:

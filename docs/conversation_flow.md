@@ -7,7 +7,7 @@ Este documento define cómo debe avanzar Sofía en WhatsApp según el estado act
 - responder al dato faltante más útil
 - hacer una sola cosa por mensaje
 - no reiniciar conversaciones ya encaminadas
-- no empujar agendamiento antes de acotar bien el servicio
+- no empujar la liga para elegir horario antes de acotar bien el servicio
 
 ## Regla madre
 
@@ -153,10 +153,11 @@ Acción:
 - mandar liga oficial de booking
 - explicar qué debe buscar/agendar con un resumen breve
 - pedir captura de confirmación al terminar
+- nunca decir que Sofía verificó disponibilidad, encontró espacio o confirmó una cita
 
 Ejemplo:
 
-`Perfecto 💗 En Fresha vas a agendar: Retiro de Gel/Acrílico - Gelish - tono liso.`
+`Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso.`
 
 Después:
 

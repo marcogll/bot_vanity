@@ -30,6 +30,7 @@ def schedule_follow_up(
     app_state: AppTaskState,
     load_context: BookingContextLoader,
     settings: Settings | None = None,
+    message: str | None = None,
 ) -> None:
     if followups_globally_paused(app_state):
         logger.info("Skipping follow-up scheduling because follow-ups are globally paused")
@@ -41,6 +42,7 @@ def schedule_follow_up(
             app_state=app_state,
             load_context=load_context,
             settings=settings,
+            message=message,
         )
     )
     app_state.followup_tasks.add(task)
@@ -54,6 +56,7 @@ async def send_follow_up_if_no_reply(
     app_state: AppTaskState,
     load_context: BookingContextLoader,
     settings: Settings | None = None,
+    message: str | None = None,
 ) -> None:
     await asyncio.sleep(delay_seconds)
     if followups_globally_paused(app_state):
@@ -68,7 +71,7 @@ async def send_follow_up_if_no_reply(
     try:
         await send_text_message(
             whatsapp_id,
-            "Soy Sofía de Vanity Nail Salon. ¿Pudiste elegir tu horario en la liga de agendamiento?",
+            message or "Soy Sofía de Vanity Nail Salon. ¿Pudiste elegir tu horario en la liga?",
         )
         logger.info("Follow-up sent to %s", whatsapp_id)
     except Exception:

@@ -8,7 +8,7 @@ Datos guardados:
 - Nombre de WhatsApp cifrado.
 - Resumen breve del interés de la clienta.
 - Servicio de interés cuando puede detectarse.
-- Citas pendientes cuando la clienta envía comprobante/captura de cita después de recibir la liga de agendamiento.
+- Citas pendientes cuando la clienta envía comprobante/captura de cita después de recibir la liga para elegir horario.
 - Citas completadas cuando, teniendo una cita pendiente, la clienta envía después el comprobante de pago/anticipo.
 
 Políticas:
@@ -16,8 +16,9 @@ Políticas:
 - La memoria se conserva por un máximo de 30 días de inactividad.
 - Las citas pendientes se purgan con la misma retención de la app.
 - Las citas completadas no se purgan automáticamente por tiempo; quedan como registro permanente.
-- El comando administrativo `dipiridú`, tras confirmación explícita, borra memoria, historial, pendientes y completadas de forma global.
-- `dipiridú` solo puede ejecutarse desde el número configurado en `ADMIN_PHONE_NUMBER`.
+- El comando administrativo `dipiridú`, tras confirmación explícita, borra memoria, historial, pendientes y completadas del chat actual.
+- El comando administrativo `dipirdu -rf`/`dipiridú -rf`, tras responder exactamente `sí borrar toda la db`, borra todas las tablas de la app.
+- Estos comandos solo pueden ejecutarse desde números configurados en `ADMIN_PHONE_NUMBER` o `ADMIN_PHONE_NUMBERS`.
 - Si Sofía no puede leer memoria cifrada por cambio de llave, debe descartarla y continuar sin contexto previo.
 - Las instalaciones existentes reciben `tenant_id='vanity'` mediante migración idempotente en `init_db`.
 

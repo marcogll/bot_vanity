@@ -86,7 +86,7 @@ from app.conversation.state import (
     is_visual_reference_request,
     looks_like_booking_or_payment_artifact,
 )
-from app.database import AsyncSessionLocal, close_db, init_db
+from app.database import AsyncSessionLocal, Base, close_db, init_db
 from app.evolution import send_text_message
 from app.janitor import janitor_loop
 from app.knowledge_engine import get_knowledge_engine
@@ -102,10 +102,15 @@ app = FastAPI(title="Sofía Bot Vanity", version="0.1.0")
 app.include_router(admin_router)
 rate_limiter: InMemoryRateLimiter | None = None
 MEMORY_DELETE_PENDING_MARKER = "__memory_delete_pending__"
+DATABASE_DELETE_PENDING_MARKER = "__database_delete_pending__"
 BOT_PAUSED_MARKER = "__bot_paused__"
 MEMORY_DELETE_CONFIRMATION_REPLY = (
     "¿Confirmas que deseas borrar la memoria e historial de este chat en Sofía? "
     "Responde sí para borrar este chat o no para cancelar."
+)
+DATABASE_DELETE_CONFIRMATION_REPLY = (
+    "¿Confirmas que deseas borrar TODA la base de datos de Sofía? "
+    "Responde exactamente `sí borrar toda la db` para borrar todo o `no` para cancelar."
 )
 INITIAL_GREETING_REPLY = (
     "¡Hola! Soy Sofía, la asistente de Vanity Nail Salon. "
@@ -588,8 +593,39 @@ async def _handle_webhook_payload(
     memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name, tenant_id=_tenant_id(settings))
     conversation_buffer = _get_conversation_buffer(payload.remote_jid)
     _update_conversation_buffer_from_user_message(conversation_buffer, payload.message, memory)
+    pending_database_delete = _database_delete_is_pending(memory)
     pending_delete = _memory_delete_is_pending(memory)
     pause_command = _pause_command_action(payload.message)
+
+    if _is_database_delete_trigger(payload.message, settings):
+        if not _is_authorized_admin(payload, settings):
+            reply = "No puedo ejecutar ese comando administrativo desde este número."
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
+            await db.commit()
+            await _send_reply(payload, reply)
+            logger.warning("Unauthorized database delete trigger from %s", payload.remote_jid)
+            return
+        reply = DATABASE_DELETE_CONFIRMATION_REPLY
+        memory.push_name = payload.push_name or memory.push_name
+        memory.resumen_perfil = _mark_database_delete_pending(memory.resumen_perfil)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
+        await db.commit()
+        await _send_reply(payload, reply)
+        logger.warning("Database delete confirmation requested by %s", payload.remote_jid)
+        return
+
+    if pending_database_delete:
+        if not _is_authorized_admin(payload, settings):
+            reply = "No puedo confirmar ese comando administrativo desde este número."
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
+            await db.commit()
+            await _send_reply(payload, reply)
+            logger.warning("Unauthorized database delete confirmation from %s", payload.remote_jid)
+            return
+        response_text = await _handle_database_delete_confirmation(db, memory, payload)
+        await _send_reply(payload, response_text)
+        logger.warning("Database delete confirmation handled for %s", payload.remote_jid)
+        return
 
     if _is_memory_delete_trigger(payload.message, settings):
         if not _is_authorized_admin(payload, settings):
@@ -667,7 +703,7 @@ async def _handle_webhook_payload(
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
-            "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
+            "con servicios, precios y citas. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
@@ -678,7 +714,7 @@ async def _handle_webhook_payload(
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
-            "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
+            "con servicios, precios y citas. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
@@ -769,10 +805,11 @@ async def _handle_webhook_payload(
         if local_booking_reply.schedules_followup:
             schedule_follow_up(
                 payload.remote_jid,
-                settings.follow_up_delay_seconds,
+                local_booking_reply.followup_delay_seconds or settings.follow_up_delay_seconds,
                 app_state=app.state,
                 load_context=_load_booking_follow_up_context,
                 settings=settings,
+                message=local_booking_reply.followup_message,
             )
         _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="local_booking_flow", v1_reply=local_booking_reply.text)
         await _send_reply(payload, local_booking_reply.text)
@@ -917,6 +954,13 @@ def _sanitize_history_content_for_model(item: Interaccion) -> str:
 
 
 def _sanitize_assistant_reply_for_user(reply: str) -> str:
+    if _contains_unsupported_availability_claim(reply):
+        return (
+            "Te ayudo con la info para que reserves tu cita 💗 "
+            "Yo no puedo ver disponibilidad ni confirmar horarios desde aquí. "
+            "La disponibilidad real la ves en Fresha al elegir tu horario. "
+            "Si ya tienes la app, te paso la liga; si no, primero te comparto los links para registrarte."
+        )
     lines = []
     for raw_line in reply.splitlines():
         line = raw_line.strip()
@@ -942,6 +986,29 @@ def _sanitize_assistant_reply_for_user(reply: str) -> str:
     if not cleaned:
         return "Cuéntame, ¿en qué te puedo ayudar hoy con tu cita o servicio? 💗"
     return cleaned
+
+
+def _contains_unsupported_availability_claim(reply: str) -> bool:
+    normalized = _normalize_text_for_matching(reply)
+    unsupported_phrases = (
+        "verificar la disponibilidad",
+        "verifico la disponibilidad",
+        "voy a verificar",
+        "puedo verificar",
+        "consultar disponibilidad",
+        "revisar disponibilidad",
+        "ver disponibilidad",
+        "hay algun dia y hora que prefieras",
+        "tenemos espacio disponible",
+        "tenemos disponibilidad",
+        "horario disponible",
+        "queda confirmada",
+        "confirmo tu cita",
+        "confirmar la cita",
+        "confirmarte la cita",
+        "verificando disponibilidad",
+    )
+    return any(phrase in normalized for phrase in unsupported_phrases)
 
 
 def _should_attach_image_to_llm(payload: EvolutionWebhookPayload) -> bool:
@@ -2135,6 +2202,24 @@ def _is_memory_delete_trigger(message: str, settings: Settings) -> bool:
     return message.strip().casefold() == settings.memory_delete_trigger.strip().casefold()
 
 
+def _is_database_delete_trigger(message: str, settings: Settings) -> bool:
+    normalized = _normalize_admin_command(message)
+    configured_trigger = _normalize_admin_command(settings.memory_delete_trigger)
+    compact = normalized.replace(" ", "")
+    return normalized in {
+        "dipirdu -rf",
+        "dipiridu -rf",
+        f"{configured_trigger} -rf",
+    } or compact in {
+        "dipirdu-rf",
+        "dipiridu-rf",
+        f"{configured_trigger}-rf",
+        "dipirdurf",
+        "dipiridurf",
+        f"{configured_trigger}rf",
+    }
+
+
 def _is_authorized_admin(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
     configured_admins = _configured_admin_numbers(settings)
     if not configured_admins:
@@ -2169,10 +2254,20 @@ def _memory_delete_is_pending(memory: SesionMemoria) -> bool:
     return (memory.resumen_perfil or "").startswith(MEMORY_DELETE_PENDING_MARKER)
 
 
+def _database_delete_is_pending(memory: SesionMemoria) -> bool:
+    return (memory.resumen_perfil or "").startswith(DATABASE_DELETE_PENDING_MARKER)
+
+
 def _mark_memory_delete_pending(summary: str | None) -> str:
     if summary and summary.startswith(MEMORY_DELETE_PENDING_MARKER):
         return summary
     return f"{MEMORY_DELETE_PENDING_MARKER}\n{summary or ''}"
+
+
+def _mark_database_delete_pending(summary: str | None) -> str:
+    if summary and summary.startswith(DATABASE_DELETE_PENDING_MARKER):
+        return summary
+    return f"{DATABASE_DELETE_PENDING_MARKER}\n{summary or ''}"
 
 
 def _clear_memory_delete_pending(summary: str | None) -> str | None:
@@ -2182,9 +2277,18 @@ def _clear_memory_delete_pending(summary: str | None) -> str | None:
     return restored or None
 
 
+def _clear_database_delete_pending(summary: str | None) -> str | None:
+    if not summary or not summary.startswith(DATABASE_DELETE_PENDING_MARKER):
+        return summary
+    restored = summary.removeprefix(DATABASE_DELETE_PENDING_MARKER).lstrip()
+    return restored or None
+
+
 def _normalize_admin_command(message: str) -> str:
     normalized = unicodedata.normalize("NFKD", message.casefold())
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    normalized = normalized.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
+    normalized = normalized.replace("‐", "-").replace("‑", "-").replace("–", "-").replace("—", "-")
     normalized = normalized.replace("/", " ")
     return " ".join(normalized.split())
 
@@ -2233,6 +2337,40 @@ def _is_confirmation(message: str) -> bool:
 def _is_cancellation(message: str) -> bool:
     normalized = message.strip().casefold()
     return normalized in {"no", "cancelar", "cancela", "conservar", "mantener"}
+
+
+def _is_database_delete_confirmation(message: str) -> bool:
+    return _normalize_admin_command(message) == "si borrar toda la db"
+
+
+async def _purge_database_records(db: AsyncSession) -> None:
+    for table in reversed(Base.metadata.sorted_tables):
+        await db.execute(delete(table))
+
+
+async def _handle_database_delete_confirmation(
+    db: AsyncSession,
+    memory: SesionMemoria,
+    payload: EvolutionWebhookPayload,
+) -> str:
+    tenant_id = getattr(memory, "tenant_id", "vanity")
+    if _is_database_delete_confirmation(payload.message):
+        await _purge_database_records(db)
+        await db.commit()
+        return "Listo, borré toda la base de datos de Sofía."
+
+    if _is_cancellation(payload.message):
+        reply = "Perfecto, cancelo el borrado total y no borro la base de datos."
+        memory.push_name = payload.push_name or memory.push_name
+        memory.resumen_perfil = _clear_database_delete_pending(memory.resumen_perfil)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=tenant_id)
+        await db.commit()
+        return reply
+
+    reply = DATABASE_DELETE_CONFIRMATION_REPLY
+    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=tenant_id)
+    await db.commit()
+    return reply
 
 
 async def _handle_memory_delete_confirmation(
@@ -2290,7 +2428,7 @@ def _summarize_profile(previous: str | None, user_message: str, assistant_messag
     service = _detect_service(user_message)
     fragments = [fragment for fragment in [previous, f"Interés detectado: {service}" if service else None] if fragment]
     if get_settings().booking_url in assistant_message:
-        fragments.append("Se envió liga de agendamiento.")
+        fragments.append("Se envió liga para elegir horario.")
     return " ".join(fragments)[-800:] or "Cliente inició conversación con Sofía."
 
 

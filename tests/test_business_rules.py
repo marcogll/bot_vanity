@@ -7,9 +7,11 @@ from app.main import (
     INITIAL_GREETING_REPLY,
     MANUAL_TEAM_INTERVENTION_MARKER,
     MEMORY_DELETE_CONFIRMATION_REPLY,
+    DATABASE_DELETE_CONFIRMATION_REPLY,
     _build_test_session_export_payload,
     _build_user_content,
     _clear_memory_delete_pending,
+    _clear_database_delete_pending,
     _conversation_context_cutoff,
     _derive_conversation_state,
     _has_extended_booking_context,
@@ -18,6 +20,7 @@ from app.main import (
     _consume_recent_outbound_signature,
     _handle_structured_booking_flow,
     _handle_memory_delete_confirmation,
+    _handle_database_delete_confirmation,
     _audio_filename_from_mimetype,
     _is_audio_payload,
     _is_test_mode_allowed_number,
@@ -27,10 +30,12 @@ from app.main import (
     _is_cancellation,
     _is_confirmation,
     _is_memory_delete_trigger,
+    _is_database_delete_trigger,
     _mark_bot_paused,
     _pause_command_action,
     _parse_test_mode_allowed_numbers,
     _mark_memory_delete_pending,
+    _mark_database_delete_pending,
     _media_prompt_hint,
     _format_whatsapp_reply,
     _is_visual_reference_request,
@@ -229,6 +234,17 @@ def test_memory_delete_trigger_is_exact_command() -> None:
     assert "este chat" in MEMORY_DELETE_CONFIRMATION_REPLY
 
 
+def test_database_delete_trigger_accepts_rf_command_only() -> None:
+    settings = type("Settings", (), {"memory_delete_trigger": "dipiridú"})()
+
+    assert _is_database_delete_trigger("dipirdu -rf", settings)
+    assert _is_database_delete_trigger("dipiridú -rf", settings)
+    assert _is_database_delete_trigger(" dipiridú –rf ", settings)
+    assert _is_database_delete_trigger("\u200bdipiridu rf", settings)
+    assert not _is_database_delete_trigger("dipiridú", settings)
+    assert "TODA la base de datos" in DATABASE_DELETE_CONFIRMATION_REPLY
+
+
 def test_memory_delete_admin_authorization_uses_configured_phone() -> None:
     settings = type("Settings", (), {"admin_phone_number": "528446686100", "admin_phone_numbers": ""})()
     authorized = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="dipiridú")
@@ -421,6 +437,39 @@ def test_memory_delete_confirmation_deletes_all_memory() -> None:
         SesionMemoria.__tablename__,
     }
     assert all(statement._where_criteria for statement in session.statements)
+
+
+def test_database_delete_confirmation_deletes_all_tables() -> None:
+    class FakeSession:
+        def __init__(self) -> None:
+            self.statements = []
+            self.committed = False
+
+        async def execute(self, statement: object) -> None:
+            self.statements.append(statement)
+
+        async def commit(self) -> None:
+            self.committed = True
+
+    payload = EvolutionWebhookPayload(remoteJid="5218446686100@s.whatsapp.net", message="sí borrar toda la db")
+    memory = type("Memory", (), {"push_name": None, "resumen_perfil": "__database_delete_pending__"})()
+    session = FakeSession()
+
+    import asyncio
+
+    reply = asyncio.run(_handle_database_delete_confirmation(session, memory, payload))
+
+    assert "toda la base de datos" in reply
+    assert session.committed
+    table_names = {statement.table.name for statement in session.statements}
+    assert {Interaccion.__tablename__, SesionMemoria.__tablename__, CitaPendiente.__tablename__}.issubset(table_names)
+    assert all(not statement._where_criteria for statement in session.statements)
+
+
+def test_database_delete_pending_marker_preserves_summary() -> None:
+    marked = _mark_database_delete_pending("Interés detectado: Uñas")
+
+    assert _clear_database_delete_pending(marked) == "Interés detectado: Uñas"
 
 
 def test_booking_checkpoint_detects_confirmation_context() -> None:
@@ -950,6 +999,20 @@ def test_sanitize_assistant_reply_removes_internal_marker_lines() -> None:
     assert MANUAL_TEAM_INTERVENTION_MARKER not in sanitized
     assert "Recepción humana ya intervino" not in sanitized
     assert "Cuéntame qué servicio buscas." in sanitized
+
+
+def test_sanitize_assistant_reply_blocks_fake_availability() -> None:
+    reply = (
+        "Voy a verificar la disponibilidad para el lunes a las 12 pm.\n\n"
+        "Tenemos espacio disponible. ¿Te gustaría confirmar la cita?"
+    )
+
+    sanitized = _sanitize_assistant_reply_for_user(reply)
+
+    assert "verificar" not in sanitized.casefold()
+    assert "tenemos espacio disponible" not in sanitized.casefold()
+    assert "no puedo ver disponibilidad" in sanitized.casefold()
+    assert "Fresha" in sanitized
 
 
 def test_sanitize_assistant_reply_falls_back_when_only_internal_lines_exist() -> None:

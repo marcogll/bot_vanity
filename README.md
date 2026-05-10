@@ -18,7 +18,7 @@
 
 ## Resumen
 
-Sofía atiende mensajes de WhatsApp para Vanity Nail Salon. El sistema responde consultas, guía al agendamiento en Fresha, valida capturas y comprobantes, y prioriza la intervención humana cuando corresponde.
+Sofía atiende mensajes de WhatsApp para Vanity Nail Salon. El sistema responde consultas, guía a la clienta para elegir horario en Fresha, valida capturas y comprobantes, y prioriza la intervención humana cuando corresponde.
 
 El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_interactions/messaging_selfimp.md](whatsapp_interactions/messaging_selfimp.md), con foco en:
 
@@ -252,7 +252,7 @@ Resumen corto:
 6. después de retiro:
    preguntar si tiene tono liso, diseño o técnica preferida
 7. ya con suficiente contexto:
-   mandar app links y liga de booking con resumen tipo `vas a agendar: Retiro de Gel/Acrílico - Gelish - tono liso`
+   preguntar si ya tiene app/cuenta Fresha; si no, mandar app links, y después mandar liga de booking con resumen tipo `vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso`
 8. 15 minutos después del booking:
    preguntar si pudo elegir horario, salvo que ya haya mandado captura/comprobante
 9. si llega captura/comprobante:
@@ -268,6 +268,8 @@ Escenarios que deben sentirse naturales:
 - `te mando la captura`
 - `se me cayó una uña`
 - `ya me atendió recepción`
+
+Sofía no consulta disponibilidad ni confirma espacios desde WhatsApp. Si la clienta da día/hora, se le guía a Fresha para ver disponibilidad real y elegir horario.
 
 ## Contexto y memoria
 
@@ -305,8 +307,9 @@ MEMORY_DELETE_TRIGGER=dipiridú
 Comportamiento actual:
 
 - solo admins autorizados pueden dispararlo
-- pide confirmación
-- borra solo el chat actual, no toda la base
+- `dipiridú` pide confirmación y borra solo el chat actual, no toda la base
+- `dipirdu -rf` o `dipiridú -rf` pide confirmación reforzada
+- para borrar toda la base, el admin debe responder exactamente `sí borrar toda la db`
 
 Si luego necesitas más de un admin, también existe:
 
@@ -527,7 +530,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-146 passed
+153 passed
 ```
 
 Comando usado en esta rama:

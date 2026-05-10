@@ -23,13 +23,15 @@
 - Se agregó `tenant_id` a historial, memoria, citas y eventos webhook, con migración idempotente en `init_db`.
 - Se agregó comparación auditada entre respuesta V1 y decisión Runtime V2 en shadow mode.
 - Se habilitó control limitado de Runtime V2 con allowlist para decisiones determinísticas.
+- Se agregó comando admin `dipirdu -rf`/`dipiridú -rf` con confirmación exacta para borrar toda la base.
+- Se bloqueó la lógica que podía inventar disponibilidad; Sofía ahora guía a Fresha y no pide día/hora ni confirma espacios.
 - Se renombró y consolidó el generador principal como `generate_assistant_reply`.
 - Se eliminaron wrappers temporales de `main.py` para helpers ya extraídos a tools.
 
 ### Booking y escalación
 
 - El flujo estructurado pregunta servicio, subtipo, retiro y diseño/técnica antes de mandar booking.
-- El cierre de booking incluye links de app iOS/Android, liga de booking y resumen `vas a agendar: ...`.
+- El cierre de booking incluye app/cuenta Fresha antes de mandar booking y usa copy natural tipo `vas a reservar: ...`.
 - El follow-up de booking queda en 15 minutos por defecto (`FOLLOW_UP_DELAY_SECONDS=900`).
 - Las escalaciones humanas notifican por WhatsApp a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
 
@@ -44,7 +46,7 @@
 
 ### Validación
 
-- Suite completa: `146 passed, 4 warnings`.
+- Suite completa: `153 passed, 4 warnings`.
 
 ## 2026-05-01
 
