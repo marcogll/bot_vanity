@@ -38,6 +38,7 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - `tenant_id` persistido en historial, memoria, citas y eventos webhook.
 - Comparación V1/V2 registrada en shadow mode con estado, intención, acción y alineación.
 - Runtime V2 puede tomar control limitado con allowlist para decisiones determinísticas.
+- Comando admin `dipirdu -rf`/`dipiridú -rf` agregado con confirmación exacta para borrar toda la base.
 - Generador principal consolidado como `generate_assistant_reply`.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
@@ -117,7 +118,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-150 passed, 4 warnings
+153 passed, 4 warnings
 ```
 
 Comando:

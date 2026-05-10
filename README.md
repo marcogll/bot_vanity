@@ -305,8 +305,9 @@ MEMORY_DELETE_TRIGGER=dipiridú
 Comportamiento actual:
 
 - solo admins autorizados pueden dispararlo
-- pide confirmación
-- borra solo el chat actual, no toda la base
+- `dipiridú` pide confirmación y borra solo el chat actual, no toda la base
+- `dipirdu -rf` o `dipiridú -rf` pide confirmación reforzada
+- para borrar toda la base, el admin debe responder exactamente `sí borrar toda la db`
 
 Si luego necesitas más de un admin, también existe:
 
@@ -527,7 +528,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-150 passed
+153 passed
 ```
 
 Comando usado en esta rama:
