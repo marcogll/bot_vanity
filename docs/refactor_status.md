@@ -99,8 +99,9 @@ El flujo local antes del LLM cubre:
 2. detección de servicio.
 3. para uñas/manicure/pedicure, pregunta por retiro.
 4. después de retiro, pregunta por tono liso, diseño o técnica.
-5. envía links de app y liga de booking con resumen `vas a agendar: ...`.
-6. programa follow-up después de 15 minutos si no hay captura/comprobante.
+5. pregunta si ya tiene app/cuenta Fresha; si no, manda links de app y espera confirmación.
+6. cuando ya tiene app/cuenta, envía liga de booking con resumen `vas a reservar: ...`.
+7. programa follow-up después de 15 minutos si no hay captura/comprobante.
 
 ## Escalación humana
 
@@ -116,7 +117,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-146 passed, 4 warnings
+150 passed, 4 warnings
 ```
 
 Comando:

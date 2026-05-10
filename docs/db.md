@@ -8,7 +8,7 @@ Datos guardados:
 - Nombre de WhatsApp cifrado.
 - Resumen breve del interés de la clienta.
 - Servicio de interés cuando puede detectarse.
-- Citas pendientes cuando la clienta envía comprobante/captura de cita después de recibir la liga de agendamiento.
+- Citas pendientes cuando la clienta envía comprobante/captura de cita después de recibir la liga para elegir horario.
 - Citas completadas cuando, teniendo una cita pendiente, la clienta envía después el comprobante de pago/anticipo.
 
 Políticas:

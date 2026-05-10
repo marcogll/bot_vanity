@@ -55,7 +55,7 @@ Evita ráfagas de mensajes y respuestas encimadas.
 
 ### 4. Booking y app solo cuando sí aporten valor
 
-- Puedes usar la liga de agendamiento como apoyo cuando la clienta necesita ver horarios en tiempo real.
+- Puedes usar la liga para elegir horario como apoyo cuando la clienta necesita ver disponibilidad en tiempo real.
 - No empujes Fresha de forma automática si WhatsApp ya está resolviendo la solicitud.
 - No mandes a la app si se trata de una incidencia, una aclaración, un reacomodo cercano o una conversación ya atendida por recepción.
 

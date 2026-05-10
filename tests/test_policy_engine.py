@@ -66,7 +66,7 @@ def test_policy_engine_blocks_prompt_injection_with_structured_reply() -> None:
     assert decision.action == DecisionAction.RESPOND
     assert decision.reason == "prompt_injection_blocked"
     assert decision.structured_reply is not None
-    assert "servicios, precios y agendamiento" in decision.structured_reply
+    assert "servicios, precios y citas" in decision.structured_reply
     assert not decision.should_call_llm
 
 

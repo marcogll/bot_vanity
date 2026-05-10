@@ -181,7 +181,7 @@ Campos sugeridos:
 role_id: staff1
 authority_level: high
 focus:
-  - agendamiento_por_whatsapp
+  - conversion_a_cita_por_whatsapp
   - llenado_eficiente_de_agenda
   - criterio_de_recepcion_experta
   - continuidad_desde_el_primer_dia

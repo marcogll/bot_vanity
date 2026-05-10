@@ -54,7 +54,7 @@ Limites:
 Responsabilidad:
 
 - experiencia de recepcion desde el dia 1
-- agendamiento eficiente por WhatsApp
+- guía eficiente para convertir conversaciones en citas
 - llenado de agenda con baja friccion
 - eleccion de la siguiente pregunta util
 - continuidad natural del flujo de cita

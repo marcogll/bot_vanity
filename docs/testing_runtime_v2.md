@@ -124,9 +124,14 @@ Escenario esperado:
 9. Cliente: `No`
 10. Sofía: pregunta tono liso, diseño o técnica.
 11. Cliente: `tono liso`
-12. Sofía: manda links de app, liga de booking y resumen `vas a agendar: Gelish - tono liso`.
+12. Sofía: confirma resumen `vas a reservar: Gelish - tono liso` y pregunta si ya tiene app/cuenta Fresha.
+13. Cliente: `No`
+14. Sofía: manda links de app iOS/Android y pide responder `ya la tengo`.
+15. Sofía: si no hay respuesta, programa follow-up de registro después de 5 minutos.
+16. Cliente: `Ya la tengo`
+17. Sofía: manda liga de booking y pide captura de confirmación.
 
-Al mandar la liga, se agenda un follow-up después de `FOLLOW_UP_DELAY_SECONDS`, por defecto 900 segundos.
+Al mandar la liga de booking, se agenda un follow-up después de `FOLLOW_UP_DELAY_SECONDS`, por defecto 900 segundos.
 
 ## Probar escalacion humana
 

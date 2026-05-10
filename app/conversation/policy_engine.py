@@ -33,7 +33,7 @@ class PolicyEngine:
                 reason="prompt_injection_blocked",
                 structured_reply=(
                     "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
-                    "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
+                    "con servicios, precios y citas. ¿Buscas uñas, pestañas o cejas?"
                 ),
             )
 

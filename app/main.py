@@ -667,7 +667,7 @@ async def _handle_webhook_payload(
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
-            "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
+            "con servicios, precios y citas. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
@@ -678,7 +678,7 @@ async def _handle_webhook_payload(
     if looks_like_prompt_injection(payload.message):
         safe_reply = (
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
-            "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
+            "con servicios, precios y citas. ¿Buscas uñas, pestañas o cejas?"
         )
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
@@ -769,10 +769,11 @@ async def _handle_webhook_payload(
         if local_booking_reply.schedules_followup:
             schedule_follow_up(
                 payload.remote_jid,
-                settings.follow_up_delay_seconds,
+                local_booking_reply.followup_delay_seconds or settings.follow_up_delay_seconds,
                 app_state=app.state,
                 load_context=_load_booking_follow_up_context,
                 settings=settings,
+                message=local_booking_reply.followup_message,
             )
         _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="local_booking_flow", v1_reply=local_booking_reply.text)
         await _send_reply(payload, local_booking_reply.text)
@@ -2290,7 +2291,7 @@ def _summarize_profile(previous: str | None, user_message: str, assistant_messag
     service = _detect_service(user_message)
     fragments = [fragment for fragment in [previous, f"Interés detectado: {service}" if service else None] if fragment]
     if get_settings().booking_url in assistant_message:
-        fragments.append("Se envió liga de agendamiento.")
+        fragments.append("Se envió liga para elegir horario.")
     return " ".join(fragments)[-800:] or "Cliente inició conversación con Sofía."
 
 
