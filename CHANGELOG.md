@@ -21,6 +21,7 @@
 - Se extrajeron modelos y mensajes de capturas/comprobantes a `app/tools/proofs.py`.
 - Se extrajo el adaptador OpenAI de análisis visual a `app/tools/vision.py`.
 - Se agregó `tenant_id` a historial, memoria, citas y eventos webhook, con migración idempotente en `init_db`.
+- Se agregó comparación auditada entre respuesta V1 y decisión Runtime V2 en shadow mode.
 - Se renombró el generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
 
 ### Booking y escalación
@@ -41,7 +42,7 @@
 
 ### Validación
 
-- Suite completa: `142 passed, 4 warnings`.
+- Suite completa: `144 passed, 4 warnings`.
 
 ## 2026-05-01
 

@@ -147,4 +147,5 @@ Resultado esperado:
 - V2 todavía no toma control de respuestas productivas.
 - El prompt builder ya está extraído. `main.py` conserva la orquestación de llamadas LLM generales, mientras el análisis visual estructurado vive en `app/tools/vision.py`.
 - La capa de tools ya cubre notificaciones, follow-up de booking, persistencia de pagos/citas, helpers puros de capturas/comprobantes y análisis visual estructurado.
+- Shadow mode registra comparación V1/V2 con `alignment=aligned|review` para auditar divergencias antes de activar control real.
 - Multi-tenant ya persiste `tenant_id` en historial, memoria, citas y eventos webhook. Aún falta activar V2 fuera de shadow mode con allowlist.

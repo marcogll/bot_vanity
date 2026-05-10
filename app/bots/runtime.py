@@ -5,6 +5,7 @@ from app.conversation import (
     AssistantDecision,
     ConversationContext,
     ConversationState,
+    DecisionAction,
     CustomerProfile,
     DetectedIntent,
     PolicyEngine,
@@ -20,6 +21,20 @@ class RuntimeEvaluation(BaseModel):
     decision: AssistantDecision
     response_plan: ResponsePlan
     role_blend: RoleBlend | None = None
+
+
+class RuntimeComparison(BaseModel):
+    tenant_id: str
+    whatsapp_id: str
+    state: str
+    intent: str
+    v1_flow: str
+    v1_reply_preview: str
+    v2_action: str
+    v2_reason: str
+    v2_should_call_llm: bool
+    v2_structured_reply: str | None = None
+    alignment: str
 
 
 class BotRuntimeV2:
@@ -88,6 +103,45 @@ class BotRuntimeV2:
             response_plan=response_plan,
             role_blend=role_blend,
         )
+
+
+def compare_runtime_to_reply(
+    evaluation: RuntimeEvaluation,
+    *,
+    v1_flow: str,
+    v1_reply: str,
+) -> RuntimeComparison:
+    return RuntimeComparison(
+        tenant_id=evaluation.context.tenant_id,
+        whatsapp_id=evaluation.context.customer.whatsapp_id,
+        state=evaluation.context.state.value,
+        intent=evaluation.context.detected_intent.value,
+        v1_flow=v1_flow,
+        v1_reply_preview=v1_reply[:500],
+        v2_action=evaluation.decision.action.value,
+        v2_reason=evaluation.decision.reason,
+        v2_should_call_llm=evaluation.decision.should_call_llm,
+        v2_structured_reply=evaluation.decision.structured_reply,
+        alignment=_runtime_alignment(evaluation, v1_flow=v1_flow, v1_reply=v1_reply),
+    )
+
+
+def _runtime_alignment(evaluation: RuntimeEvaluation, *, v1_flow: str, v1_reply: str) -> str:
+    action = evaluation.decision.action
+    if action == DecisionAction.ASK_LLM and v1_flow == "llm":
+        return "aligned"
+    if action == DecisionAction.ESCALATE_HUMAN and v1_flow == "human_handover":
+        return "aligned"
+    if action == DecisionAction.SILENCE and not v1_reply.strip():
+        return "aligned"
+    if evaluation.decision.structured_reply:
+        if _normalize_reply(evaluation.decision.structured_reply) == _normalize_reply(v1_reply):
+            return "aligned"
+    return "review"
+
+
+def _normalize_reply(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 def _coerce_conversation_state(state: str | ConversationState | None) -> ConversationState:

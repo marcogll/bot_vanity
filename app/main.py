@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin import admin_router, bootstrap_admin_user
 from app.bots import BotRuntimeV2
+from app.bots.runtime import RuntimeEvaluation, compare_runtime_to_reply
 from app.business_rules import human_handover_reply, needs_human_handover
 from app.tools.booking import schedule_follow_up
 from app.tools.notifications import schedule_human_handover_notification
@@ -697,7 +698,7 @@ async def _handle_webhook_payload(
         completed is not None,
         settings.test_mode_enabled,
     )
-    _run_runtime_v2_shadow_evaluation(
+    runtime_v2_evaluation = _run_runtime_v2_shadow_evaluation(
         payload=payload,
         memory=memory,
         history=history,
@@ -711,6 +712,7 @@ async def _handle_webhook_payload(
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "new", INITIAL_GREETING_REPLY)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
+        _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="initial_greeting", v1_reply=INITIAL_GREETING_REPLY)
         await _send_reply(payload, INITIAL_GREETING_REPLY)
         logger.info("Reply sent: remote_jid=%s flow=initial_greeting", payload.remote_jid)
         return
@@ -720,6 +722,7 @@ async def _handle_webhook_payload(
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "collecting_service", name_only_reply)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
+        _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="name_followup_without_llm", v1_reply=name_only_reply)
         await _send_reply(payload, name_only_reply)
         logger.info("Reply sent: remote_jid=%s flow=name_followup_without_llm", payload.remote_jid)
         return
@@ -741,6 +744,7 @@ async def _handle_webhook_payload(
                 load_context=_load_booking_follow_up_context,
                 settings=settings,
             )
+        _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="local_booking_flow", v1_reply=local_booking_reply.text)
         await _send_reply(payload, local_booking_reply.text)
         logger.info("Reply sent: remote_jid=%s flow=local_booking_flow", payload.remote_jid)
         return
@@ -769,6 +773,7 @@ async def _handle_webhook_payload(
         memory.servicio_interes = _detect_service(payload.message) or memory.servicio_interes
         await db.commit()
         _schedule_test_session_export(payload.remote_jid, settings)
+        _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="structured_booking", v1_reply=structured_booking_reply)
         await _send_reply(payload, structured_booking_reply)
         logger.info("Reply sent: remote_jid=%s flow=structured_booking", payload.remote_jid)
         return
@@ -796,6 +801,7 @@ async def _handle_webhook_payload(
             settings=settings,
         )
 
+    _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="llm", v1_reply=response_text)
     await _send_reply(payload, response_text)
     logger.info("Reply sent: remote_jid=%s flow=llm state=%s", payload.remote_jid, conversation_state)
 
@@ -1058,9 +1064,9 @@ def _run_runtime_v2_shadow_evaluation(
     conversation_state: str,
     conversation_buffer: ConversationBuffer | None,
     settings: Settings,
-) -> None:
+) -> RuntimeEvaluation | None:
     if not _should_run_runtime_v2_shadow(settings):
-        return
+        return None
     try:
         tenant_config = load_tenant_config(settings.default_tenant_id, settings.tenant_config_path)
         evaluation = BotRuntimeV2(
@@ -1091,7 +1097,7 @@ def _run_runtime_v2_shadow_evaluation(
         return
     except Exception:
         logger.exception("Runtime V2 shadow evaluation failed for %s", payload.remote_jid)
-        return
+        return None
 
     role_blend = evaluation.role_blend
     logger.info(
@@ -1105,6 +1111,29 @@ def _run_runtime_v2_shadow_evaluation(
         evaluation.response_plan.action,
         role_blend.dominant_role_id if role_blend else "",
         role_blend.weights if role_blend else {},
+    )
+    return evaluation
+
+
+def _log_runtime_v2_comparison(
+    evaluation: RuntimeEvaluation | None,
+    *,
+    v1_flow: str,
+    v1_reply: str,
+) -> None:
+    if evaluation is None:
+        return
+    comparison = compare_runtime_to_reply(evaluation, v1_flow=v1_flow, v1_reply=v1_reply)
+    logger.info(
+        "Runtime V2 comparison: remote_jid=%s tenant=%s state=%s intent=%s v1_flow=%s v2_action=%s alignment=%s reason=%s",
+        comparison.whatsapp_id,
+        comparison.tenant_id,
+        comparison.state,
+        comparison.intent,
+        comparison.v1_flow,
+        comparison.v2_action,
+        comparison.alignment,
+        comparison.v2_reason,
     )
 
 
