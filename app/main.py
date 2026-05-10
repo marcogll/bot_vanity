@@ -954,6 +954,13 @@ def _sanitize_history_content_for_model(item: Interaccion) -> str:
 
 
 def _sanitize_assistant_reply_for_user(reply: str) -> str:
+    if _contains_unsupported_availability_claim(reply):
+        return (
+            "Te ayudo con la info para que reserves tu cita 💗 "
+            "Yo no puedo ver disponibilidad ni confirmar horarios desde aquí. "
+            "La disponibilidad real la ves en Fresha al elegir tu horario. "
+            "Si ya tienes la app, te paso la liga; si no, primero te comparto los links para registrarte."
+        )
     lines = []
     for raw_line in reply.splitlines():
         line = raw_line.strip()
@@ -979,6 +986,29 @@ def _sanitize_assistant_reply_for_user(reply: str) -> str:
     if not cleaned:
         return "Cuéntame, ¿en qué te puedo ayudar hoy con tu cita o servicio? 💗"
     return cleaned
+
+
+def _contains_unsupported_availability_claim(reply: str) -> bool:
+    normalized = _normalize_text_for_matching(reply)
+    unsupported_phrases = (
+        "verificar la disponibilidad",
+        "verifico la disponibilidad",
+        "voy a verificar",
+        "puedo verificar",
+        "consultar disponibilidad",
+        "revisar disponibilidad",
+        "ver disponibilidad",
+        "hay algun dia y hora que prefieras",
+        "tenemos espacio disponible",
+        "tenemos disponibilidad",
+        "horario disponible",
+        "queda confirmada",
+        "confirmo tu cita",
+        "confirmar la cita",
+        "confirmarte la cita",
+        "verificando disponibilidad",
+    )
+    return any(phrase in normalized for phrase in unsupported_phrases)
 
 
 def _should_attach_image_to_llm(payload: EvolutionWebhookPayload) -> bool:
@@ -2175,10 +2205,18 @@ def _is_memory_delete_trigger(message: str, settings: Settings) -> bool:
 def _is_database_delete_trigger(message: str, settings: Settings) -> bool:
     normalized = _normalize_admin_command(message)
     configured_trigger = _normalize_admin_command(settings.memory_delete_trigger)
+    compact = normalized.replace(" ", "")
     return normalized in {
         "dipirdu -rf",
         "dipiridu -rf",
         f"{configured_trigger} -rf",
+    } or compact in {
+        "dipirdu-rf",
+        "dipiridu-rf",
+        f"{configured_trigger}-rf",
+        "dipirdurf",
+        "dipiridurf",
+        f"{configured_trigger}rf",
     }
 
 
@@ -2249,6 +2287,8 @@ def _clear_database_delete_pending(summary: str | None) -> str | None:
 def _normalize_admin_command(message: str) -> str:
     normalized = unicodedata.normalize("NFKD", message.casefold())
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
+    normalized = normalized.replace("\u200b", "").replace("\u200c", "").replace("\u200d", "")
+    normalized = normalized.replace("‐", "-").replace("‑", "-").replace("–", "-").replace("—", "-")
     normalized = normalized.replace("/", " ")
     return " ".join(normalized.split())
 

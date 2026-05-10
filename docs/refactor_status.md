@@ -103,6 +103,7 @@ El flujo local antes del LLM cubre:
 5. pregunta si ya tiene app/cuenta Fresha; si no, manda links de app y espera confirmación.
 6. cuando ya tiene app/cuenta, envía liga de booking con resumen `vas a reservar: ...`.
 7. programa follow-up después de 15 minutos si no hay captura/comprobante.
+8. no consulta ni confirma disponibilidad; guía a Fresha para elegir horario real.
 
 ## Escalación humana
 

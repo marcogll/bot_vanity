@@ -239,6 +239,8 @@ def test_database_delete_trigger_accepts_rf_command_only() -> None:
 
     assert _is_database_delete_trigger("dipirdu -rf", settings)
     assert _is_database_delete_trigger("dipiridú -rf", settings)
+    assert _is_database_delete_trigger(" dipiridú –rf ", settings)
+    assert _is_database_delete_trigger("\u200bdipiridu rf", settings)
     assert not _is_database_delete_trigger("dipiridú", settings)
     assert "TODA la base de datos" in DATABASE_DELETE_CONFIRMATION_REPLY
 
@@ -997,6 +999,20 @@ def test_sanitize_assistant_reply_removes_internal_marker_lines() -> None:
     assert MANUAL_TEAM_INTERVENTION_MARKER not in sanitized
     assert "Recepción humana ya intervino" not in sanitized
     assert "Cuéntame qué servicio buscas." in sanitized
+
+
+def test_sanitize_assistant_reply_blocks_fake_availability() -> None:
+    reply = (
+        "Voy a verificar la disponibilidad para el lunes a las 12 pm.\n\n"
+        "Tenemos espacio disponible. ¿Te gustaría confirmar la cita?"
+    )
+
+    sanitized = _sanitize_assistant_reply_for_user(reply)
+
+    assert "verificar" not in sanitized.casefold()
+    assert "tenemos espacio disponible" not in sanitized.casefold()
+    assert "no puedo ver disponibilidad" in sanitized.casefold()
+    assert "Fresha" in sanitized
 
 
 def test_sanitize_assistant_reply_falls_back_when_only_internal_lines_exist() -> None:

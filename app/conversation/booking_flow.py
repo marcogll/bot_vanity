@@ -61,6 +61,20 @@ def booking_flow_reply(
     history: list[dict[str, str]],
     settings: BookingFlowSettings,
 ) -> BookingFlowReply | None:
+    if last_assistant_offered_booking(history) and _is_positive_short_answer(message) and _history_has_nail_booking_detail(history):
+        summary = _latest_booking_summary(history) or build_booking_summary("", history)
+        user_messages = [
+            item.get("content") or ""
+            for item in history
+            if item.get("role") == "user"
+        ]
+        if _latest_retiro_answer(user_messages) is None:
+            return BookingFlowReply(
+                f"Perfecto 💗 En Fresha vas a reservar: {summary}.\n\n"
+                "Solo para calcular bien el tiempo, ¿requieres retiro de algún producto? _Gel, acrílico, polygel, etc._"
+            )
+        return BookingFlowReply(_app_registration_question_reply(summary))
+
     if last_assistant_requested_app_registration(history):
         has_app = detect_app_registration_answer(message)
         if has_app is True:
@@ -82,7 +96,18 @@ def booking_flow_reply(
     if last_assistant_requested_retiro(history):
         retiro = detect_retiro_answer(message)
         if retiro is None:
+            if _message_has_nail_booking_detail(message):
+                summary = build_booking_summary(message, history)
+                return BookingFlowReply(
+                    f"Perfecto 💗 En Fresha vas a reservar: {summary}.\n\n"
+                    "Solo para calcular bien el tiempo, ¿requieres retiro de algún producto? _Gel, acrílico, polygel, etc._"
+                )
             return None
+        if _history_has_nail_booking_detail(history):
+            summary = _latest_booking_summary(history) or build_booking_summary("", history)
+            return BookingFlowReply(
+                _app_registration_question_reply(summary),
+            )
         return BookingFlowReply(
             "Perfecto 💗 ¿Tiene algo en mente, como tono liso, algún diseño o técnica preferida?"
         )
@@ -101,7 +126,10 @@ def last_assistant_requested_retiro(history: list[dict[str, str]]) -> bool:
     if not last:
         return False
     normalized = normalize_text_for_matching(last)
-    return "requiere retiro" in normalized and "producto" in normalized
+    return (
+        ("requiere retiro" in normalized or "requieres retiro" in normalized or "necesitas retiro" in normalized)
+        and "producto" in normalized
+    )
 
 
 def last_assistant_requested_design_preference(history: list[dict[str, str]]) -> bool:
@@ -180,6 +208,11 @@ def detect_app_ready_answer(message: str) -> bool:
     )
 
 
+def _is_positive_short_answer(message: str) -> bool:
+    normalized = normalize_text_for_matching(message)
+    return normalized in {"si", "claro", "ok", "okay", "va", "sale", "por favor"}
+
+
 def _contains_word(normalized: str, word: str) -> bool:
     return bool(re.search(rf"\b{re.escape(word)}\b", normalized))
 
@@ -202,6 +235,18 @@ def build_booking_summary(message: str, history: list[dict[str, str]]) -> str:
     if design:
         parts.append(design)
     return " - ".join(parts) if parts else "el servicio que elegiste"
+
+
+def _message_has_nail_booking_detail(message: str) -> bool:
+    return bool(detect_nail_subservice(message) or _clean_design_preference(message))
+
+
+def _history_has_nail_booking_detail(history: list[dict[str, str]]) -> bool:
+    return any(
+        _message_has_nail_booking_detail(item.get("content") or "")
+        for item in history
+        if item.get("role") == "user"
+    )
 
 
 def _app_registration_question_reply(summary: str) -> str:
@@ -249,6 +294,17 @@ def last_assistant_sent_app_registration_links(history: list[dict[str, str]]) ->
         return False
     normalized = normalize_text_for_matching(last)
     return "descarga fresha" in normalized and "ya la tengo" in normalized
+
+
+def last_assistant_offered_booking(history: list[dict[str, str]]) -> bool:
+    last = _last_assistant_message(history)
+    if not last:
+        return False
+    normalized = normalize_text_for_matching(last)
+    return (
+        ("te gustaria agendar" in normalized or "te gustaria reservar" in normalized or "quieres reservar" in normalized)
+        and ("cita" in normalized or "horario" in normalized)
+    )
 
 
 def _latest_booking_summary(history: list[dict[str, str]]) -> str | None:

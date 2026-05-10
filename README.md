@@ -252,7 +252,7 @@ Resumen corto:
 6. después de retiro:
    preguntar si tiene tono liso, diseño o técnica preferida
 7. ya con suficiente contexto:
-   mandar app links y liga de booking con resumen tipo `vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso`
+   preguntar si ya tiene app/cuenta Fresha; si no, mandar app links, y después mandar liga de booking con resumen tipo `vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso`
 8. 15 minutos después del booking:
    preguntar si pudo elegir horario, salvo que ya haya mandado captura/comprobante
 9. si llega captura/comprobante:
@@ -268,6 +268,8 @@ Escenarios que deben sentirse naturales:
 - `te mando la captura`
 - `se me cayó una uña`
 - `ya me atendió recepción`
+
+Sofía no consulta disponibilidad ni confirma espacios desde WhatsApp. Si la clienta da día/hora, se le guía a Fresha para ver disponibilidad real y elegir horario.
 
 ## Contexto y memoria
 

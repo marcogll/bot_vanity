@@ -24,6 +24,7 @@
 - Se agregó comparación auditada entre respuesta V1 y decisión Runtime V2 en shadow mode.
 - Se habilitó control limitado de Runtime V2 con allowlist para decisiones determinísticas.
 - Se agregó comando admin `dipirdu -rf`/`dipiridú -rf` con confirmación exacta para borrar toda la base.
+- Se bloqueó la lógica que podía inventar disponibilidad; Sofía ahora guía a Fresha y no pide día/hora ni confirma espacios.
 - Se renombró y consolidó el generador principal como `generate_assistant_reply`.
 - Se eliminaron wrappers temporales de `main.py` para helpers ya extraídos a tools.
 
