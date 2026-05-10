@@ -29,7 +29,24 @@ async def init_db() -> None:
         await conn.execute(
             text(
                 """
+                ALTER TABLE IF EXISTS interacciones
+                ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(80) NOT NULL DEFAULT 'vanity'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
+                ALTER TABLE IF EXISTS sesiones_memoria
+                ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(80) NOT NULL DEFAULT 'vanity'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
                 ALTER TABLE IF EXISTS citas_pendientes
+                ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(80) NOT NULL DEFAULT 'vanity',
                 ADD COLUMN IF NOT EXISTS booking_data TEXT,
                 ADD COLUMN IF NOT EXISTS booking_status VARCHAR(40),
                 ADD COLUMN IF NOT EXISTS deposit_status VARCHAR(40)
@@ -40,6 +57,7 @@ async def init_db() -> None:
             text(
                 """
                 ALTER TABLE IF EXISTS citas_completadas
+                ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(80) NOT NULL DEFAULT 'vanity',
                 ADD COLUMN IF NOT EXISTS booking_data TEXT,
                 ADD COLUMN IF NOT EXISTS payment_data TEXT,
                 ADD COLUMN IF NOT EXISTS booking_status VARCHAR(40),
@@ -62,6 +80,14 @@ async def init_db() -> None:
         await conn.execute(
             text(
                 """
+                ALTER TABLE IF EXISTS webhook_events
+                ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(80) NOT NULL DEFAULT 'vanity'
+                """
+            )
+        )
+        await conn.execute(
+            text(
+                """
                 ALTER TABLE IF EXISTS service_catalog
                 ADD COLUMN IF NOT EXISTS service_type VARCHAR(40) DEFAULT 'service',
                 ADD COLUMN IF NOT EXISTS external_service_id VARCHAR(120),
@@ -70,6 +96,21 @@ async def init_db() -> None:
                 ADD COLUMN IF NOT EXISTS tax_percent DOUBLE PRECISION DEFAULT 0
                 """
             )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_interacciones_tenant_whatsapp_id ON interacciones (tenant_id, whatsapp_id)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_sesiones_memoria_tenant_whatsapp_id ON sesiones_memoria (tenant_id, whatsapp_id)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_citas_pendientes_tenant_whatsapp_id ON citas_pendientes (tenant_id, whatsapp_id)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_citas_completadas_tenant_whatsapp_id ON citas_completadas (tenant_id, whatsapp_id)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS ix_webhook_events_tenant_whatsapp_id_created_at ON webhook_events (tenant_id, whatsapp_id, created_at)")
         )
 
 

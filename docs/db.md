@@ -3,6 +3,7 @@
 Sofía guarda contexto mínimo para mejorar la continuidad de la conversación.
 
 Datos guardados:
+- `tenant_id` para separar historial, memoria, citas y eventos por tenant.
 - Historial reciente de mensajes.
 - Nombre de WhatsApp cifrado.
 - Resumen breve del interés de la clienta.
@@ -18,9 +19,11 @@ Políticas:
 - El comando administrativo `dipiridú`, tras confirmación explícita, borra memoria, historial, pendientes y completadas de forma global.
 - `dipiridú` solo puede ejecutarse desde el número configurado en `ADMIN_PHONE_NUMBER`.
 - Si Sofía no puede leer memoria cifrada por cambio de llave, debe descartarla y continuar sin contexto previo.
+- Las instalaciones existentes reciben `tenant_id='vanity'` mediante migración idempotente en `init_db`.
 
 Tablas:
 - `interacciones`: historial cifrado de conversación.
 - `sesiones_memoria`: perfil/resumen por WhatsApp.
 - `citas_pendientes`: una cita abierta por WhatsApp con comprobante de cita recibido.
 - `citas_completadas`: registro permanente cuando ya se recibió comprobante de cita y comprobante de pago.
+- `webhook_events`: deduplicación y locks operativos por evento.

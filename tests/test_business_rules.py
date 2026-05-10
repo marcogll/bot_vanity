@@ -1,18 +1,14 @@
 from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
-    BookingAnalysis,
     BOOKING_CONVERSATION_CONTEXT_HOURS,
     DEFAULT_CONVERSATION_CONTEXT_HOURS,
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
     MANUAL_TEAM_INTERVENTION_MARKER,
     MEMORY_DELETE_CONFIRMATION_REPLY,
-    PaymentAnalysis,
-    _appointment_confirmation_reply,
     _build_test_session_export_payload,
     _build_user_content,
-    _booking_proof_message,
     _clear_memory_delete_pending,
     _conversation_context_cutoff,
     _derive_conversation_state,
@@ -36,13 +32,11 @@ from app.main import (
     _parse_test_mode_allowed_numbers,
     _mark_memory_delete_pending,
     _media_prompt_hint,
-    _payment_confirmation_reply,
     _format_whatsapp_reply,
     _is_visual_reference_request,
     _strip_data_url_prefix,
     _sanitize_assistant_reply_for_user,
     _sanitize_history_content_for_model,
-    _looks_like_appointment_confirmation_context,
     _looks_like_booking_or_payment_artifact,
     _name_and_service_followup_reply,
     _has_advanced_conversation_context,
@@ -61,6 +55,11 @@ from app.main import (
     _should_handle_in_test_mode,
     _should_export_test_session_for_number,
     _is_supported_message_event,
+    _runtime_v2_media_metadata,
+    _runtime_v2_control_outcome,
+    _runtime_v2_is_allowed_number,
+    _should_run_runtime_v2_shadow,
+    _should_runtime_v2_take_control,
     _technical_fallback_reply,
     _webhook_dedupe_key,
     ConversationBuffer,
@@ -69,6 +68,14 @@ from app.main import (
 from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
+from app.tools.proofs import (
+    BookingAnalysis,
+    PaymentAnalysis,
+    appointment_confirmation_reply,
+    booking_proof_message,
+    looks_like_appointment_confirmation_context,
+    payment_confirmation_reply,
+)
 
 
 def test_prompt_injection_marker_is_detected() -> None:
@@ -125,6 +132,80 @@ def test_test_session_export_includes_admin_even_if_not_allowlisted() -> None:
     )()
 
     assert _should_export_test_session_for_number("5218441112233@s.whatsapp.net", settings)
+
+
+def test_runtime_v2_shadow_requires_enabled_and_shadow_flags() -> None:
+    enabled = type(
+        "Settings",
+        (),
+        {"bot_runtime_v2_enabled": True, "bot_runtime_v2_shadow_mode": True},
+    )()
+    disabled = type(
+        "Settings",
+        (),
+        {"bot_runtime_v2_enabled": True, "bot_runtime_v2_shadow_mode": False},
+    )()
+
+    assert _should_run_runtime_v2_shadow(enabled)
+    assert not _should_run_runtime_v2_shadow(disabled)
+
+
+def test_runtime_v2_control_requires_enabled_non_shadow_and_allowed_number() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "bot_runtime_v2_enabled": True,
+            "bot_runtime_v2_shadow_mode": False,
+            "bot_runtime_v2_allowed_numbers": "528441112233",
+            "admin_phone_number": "",
+            "admin_phone_numbers": "",
+            "test_mode_enabled": False,
+            "test_mode_allowed_numbers": "",
+        },
+    )()
+    payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="Hola")
+
+    assert _runtime_v2_is_allowed_number(payload, settings)
+    assert _should_runtime_v2_take_control(payload, settings, object())
+
+
+def test_runtime_v2_control_blocks_unlisted_number() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "bot_runtime_v2_enabled": True,
+            "bot_runtime_v2_shadow_mode": False,
+            "bot_runtime_v2_allowed_numbers": "528449999999",
+            "admin_phone_number": "",
+            "admin_phone_numbers": "",
+            "test_mode_enabled": False,
+            "test_mode_allowed_numbers": "",
+        },
+    )()
+    payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="Hola")
+
+    assert not _runtime_v2_is_allowed_number(payload, settings)
+    assert not _should_runtime_v2_take_control(payload, settings, object())
+
+
+def test_runtime_v2_media_metadata_omits_none_values() -> None:
+    payload = EvolutionWebhookPayload(
+        remoteJid="5218441112233@s.whatsapp.net",
+        message="Te mando captura",
+        messageType="imageMessage",
+        mediaMimetype="image/jpeg",
+        hasMedia=True,
+    )
+
+    metadata = _runtime_v2_media_metadata(payload)
+
+    assert metadata == {
+        "message_type": "imageMessage",
+        "media_mimetype": "image/jpeg",
+        "has_media": True,
+    }
 
 
 def test_human_handover_marker_is_detected() -> None:
@@ -353,7 +434,7 @@ def test_booking_checkpoint_detects_confirmation_context() -> None:
         )()
     ]
 
-    assert _looks_like_appointment_confirmation_context(memory, history, settings)
+    assert looks_like_appointment_confirmation_context(memory, history, settings)
 
 
 def test_booking_proof_message_summarizes_media_metadata() -> None:
@@ -366,7 +447,7 @@ def test_booking_proof_message_summarizes_media_metadata() -> None:
         hasMedia=True,
     )
 
-    proof = _booking_proof_message(payload)
+    proof = booking_proof_message(payload)
 
     assert "imageMessage" in proof
     assert "image/jpeg" in proof
@@ -383,7 +464,7 @@ def test_appointment_confirmation_reply_requests_deposit_when_missing() -> None:
         deposit_status="pending",
     )
 
-    reply = _appointment_confirmation_reply(booking, settings)
+    reply = appointment_confirmation_reply(booking, settings)
 
     assert "anticipo de $200" in reply
     assert "https://pay.example/test" in reply
@@ -393,7 +474,7 @@ def test_payment_confirmation_reply_confirms_saved_deposit() -> None:
     booking = BookingAnalysis(booking_confirmed=True, appointment_date="2026-04-20", start_time="3:30 p. m.")
     payment = PaymentAnalysis(payment_detected=True, transaction_id="ABC123", deposit_status="paid")
 
-    reply = _payment_confirmation_reply(booking, payment)
+    reply = payment_confirmation_reply(booking, payment)
 
     assert "Ya quedó registrado tu anticipo" in reply
     assert "2026-04-20" in reply

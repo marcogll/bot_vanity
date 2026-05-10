@@ -21,9 +21,13 @@ def utc_now() -> datetime:
 
 class Interaccion(Base):
     __tablename__ = "interacciones"
-    __table_args__ = (Index("ix_interacciones_whatsapp_id", "whatsapp_id"),)
+    __table_args__ = (
+        Index("ix_interacciones_tenant_whatsapp_id", "tenant_id", "whatsapp_id"),
+        Index("ix_interacciones_whatsapp_id", "whatsapp_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(80), default="vanity", nullable=False)
     whatsapp_id: Mapped[str] = mapped_column(String(128), nullable=False)
     role: Mapped[MessageRole] = mapped_column(Enum(MessageRole, name="message_role"), nullable=False)
     encrypted_content: Mapped[str] = mapped_column("content", Text, nullable=False)
@@ -36,7 +40,8 @@ class Interaccion(Base):
         content: str,
         **kwargs: object,
     ) -> None:
-        super().__init__(whatsapp_id=whatsapp_id, role=role, **kwargs)
+        tenant_id = kwargs.pop("tenant_id", "vanity")
+        super().__init__(tenant_id=tenant_id, whatsapp_id=whatsapp_id, role=role, **kwargs)
         self.content = content
 
     @property
@@ -54,9 +59,13 @@ class Interaccion(Base):
 
 class SesionMemoria(Base):
     __tablename__ = "sesiones_memoria"
-    __table_args__ = (Index("ix_sesiones_memoria_whatsapp_id", "whatsapp_id"),)
+    __table_args__ = (
+        Index("ix_sesiones_memoria_tenant_whatsapp_id", "tenant_id", "whatsapp_id"),
+        Index("ix_sesiones_memoria_whatsapp_id", "whatsapp_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(80), default="vanity", nullable=False)
     whatsapp_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
     resumen_perfil: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,7 +81,8 @@ class SesionMemoria(Base):
     )
 
     def __init__(self, whatsapp_id: str, push_name: str | None = None, **kwargs: object) -> None:
-        super().__init__(whatsapp_id=whatsapp_id, **kwargs)
+        tenant_id = kwargs.pop("tenant_id", "vanity")
+        super().__init__(tenant_id=tenant_id, whatsapp_id=whatsapp_id, **kwargs)
         self.push_name = push_name
 
     @property
@@ -86,9 +96,13 @@ class SesionMemoria(Base):
 
 class CitaPendiente(Base):
     __tablename__ = "citas_pendientes"
-    __table_args__ = (Index("ix_citas_pendientes_whatsapp_id", "whatsapp_id"),)
+    __table_args__ = (
+        Index("ix_citas_pendientes_tenant_whatsapp_id", "tenant_id", "whatsapp_id"),
+        Index("ix_citas_pendientes_whatsapp_id", "whatsapp_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(80), default="vanity", nullable=False)
     whatsapp_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
     servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -112,7 +126,8 @@ class CitaPendiente(Base):
         appointment_proof_message: str | None = None,
         **kwargs: object,
     ) -> None:
-        super().__init__(whatsapp_id=whatsapp_id, **kwargs)
+        tenant_id = kwargs.pop("tenant_id", "vanity")
+        super().__init__(tenant_id=tenant_id, whatsapp_id=whatsapp_id, **kwargs)
         self.push_name = push_name
         self.appointment_proof_message = appointment_proof_message
 
@@ -143,9 +158,13 @@ class CitaPendiente(Base):
 
 class CitaCompletada(Base):
     __tablename__ = "citas_completadas"
-    __table_args__ = (Index("ix_citas_completadas_whatsapp_id", "whatsapp_id"),)
+    __table_args__ = (
+        Index("ix_citas_completadas_tenant_whatsapp_id", "tenant_id", "whatsapp_id"),
+        Index("ix_citas_completadas_whatsapp_id", "whatsapp_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(80), default="vanity", nullable=False)
     whatsapp_id: Mapped[str] = mapped_column(String(128), nullable=False)
     encrypted_push_name: Mapped[str | None] = mapped_column("push_name", Text, nullable=True)
     servicio_interes: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -180,7 +199,8 @@ class CitaCompletada(Base):
         payment_proof_message: str | None = None,
         **kwargs: object,
     ) -> None:
-        super().__init__(whatsapp_id=whatsapp_id, **kwargs)
+        tenant_id = kwargs.pop("tenant_id", "vanity")
+        super().__init__(tenant_id=tenant_id, whatsapp_id=whatsapp_id, **kwargs)
         self.push_name = push_name
         self.appointment_proof_message = appointment_proof_message
         self.payment_proof_message = payment_proof_message
@@ -229,12 +249,14 @@ class CitaCompletada(Base):
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
     __table_args__ = (
+        Index("ix_webhook_events_tenant_whatsapp_id_created_at", "tenant_id", "whatsapp_id", "created_at"),
         Index("ix_webhook_events_whatsapp_id_created_at", "whatsapp_id", "created_at"),
         Index("ix_webhook_events_event_kind_created_at", "event_kind", "created_at"),
         Index("ix_webhook_events_event_key", "event_key", unique=True),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str] = mapped_column(String(80), default="vanity", nullable=False)
     event_kind: Mapped[str] = mapped_column(String(40), nullable=False)
     whatsapp_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     instance_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
