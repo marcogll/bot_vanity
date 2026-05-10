@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from openai import AsyncOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.admin import admin_router, bootstrap_admin_user
 from app.bots import BotRuntimeV2
 from app.business_rules import human_handover_reply, needs_human_handover
+from app.tools.booking import schedule_follow_up
+from app.tools.notifications import schedule_human_handover_notification
+from app.tools.proofs import (
+    BookingAnalysis,
+    PaymentAnalysis,
+    appointment_confirmation_reply,
+    booking_proof_message,
+    booking_summary_fragment,
+    looks_like_appointment_confirmation_context,
+    payment_confirmation_reply,
+)
 from app.catalog_sync import sync_service_catalog_from_docs
 from app.channels.whatsapp import (
     EvolutionWebhookPayload,
@@ -106,32 +117,6 @@ LOCAL_TIMEZONE = ZoneInfo("America/Monterrey")
 
 class WebhookResponse(BaseModel):
     message: str
-
-
-class BookingAnalysis(BaseModel):
-    booking_confirmed: bool = False
-    branch_name: str | None = None
-    appointment_date: str | None = None
-    start_time: str | None = None
-    end_time: str | None = None
-    services: list[str] = Field(default_factory=list)
-    total_amount: float | None = None
-    currency: str | None = None
-    booking_status: str | None = None
-    deposit_status: str | None = None
-    deposit_already_paid: bool = False
-    summary: str | None = None
-
-
-class PaymentAnalysis(BaseModel):
-    payment_detected: bool = False
-    transaction_id: str | None = None
-    transaction_status: str | None = None
-    payer_name: str | None = None
-    amount: float | None = None
-    currency: str | None = None
-    deposit_status: str | None = None
-    summary: str | None = None
 
 
 @app.on_event("startup")
@@ -642,7 +627,7 @@ async def _handle_webhook_payload(
         reply = human_handover_reply()
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
         _schedule_test_session_export(payload.remote_jid, settings)
-        _schedule_human_handover_notification(payload, settings)
+        schedule_human_handover_notification(payload, app.state, settings=settings)
         await _send_reply(payload, reply)
         logger.info("Human handover requested by %s", payload.remote_jid)
         return
@@ -719,7 +704,13 @@ async def _handle_webhook_payload(
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, local_booking_reply.text)
         _schedule_test_session_export(payload.remote_jid, settings)
         if local_booking_reply.schedules_followup:
-            _schedule_follow_up(payload.remote_jid, settings.follow_up_delay_seconds)
+            schedule_follow_up(
+                payload.remote_jid,
+                settings.follow_up_delay_seconds,
+                app_state=app.state,
+                load_context=_load_booking_follow_up_context,
+                settings=settings,
+            )
         await _send_reply(payload, local_booking_reply.text)
         logger.info("Reply sent: remote_jid=%s flow=local_booking_flow", payload.remote_jid)
         return
@@ -760,7 +751,13 @@ async def _handle_webhook_payload(
     _schedule_test_session_export(payload.remote_jid, settings)
 
     if _should_schedule_booking_follow_up(payload, response_text, settings):
-        _schedule_follow_up(payload.remote_jid, settings.follow_up_delay_seconds)
+        schedule_follow_up(
+            payload.remote_jid,
+            settings.follow_up_delay_seconds,
+            app_state=app.state,
+            load_context=_load_booking_follow_up_context,
+            settings=settings,
+        )
 
     await _send_reply(payload, response_text)
     logger.info("Reply sent: remote_jid=%s flow=llm state=%s", payload.remote_jid, conversation_state)
@@ -931,6 +928,16 @@ def _should_schedule_booking_follow_up(
     return settings.booking_url in response_text and not _has_advanced_conversation_context(payload)
 
 
+async def _load_booking_follow_up_context(
+    whatsapp_id: str,
+) -> tuple[list[Interaccion], CitaPendiente | None, CitaCompletada | None]:
+    async with AsyncSessionLocal() as db:
+        pending = await _get_pending_booking(db, whatsapp_id)
+        completed = await _get_completed_booking(db, whatsapp_id)
+        history = await _get_contextual_history(db, whatsapp_id, pending, completed, limit=5)
+    return history, pending, completed
+
+
 def _derive_conversation_state(
     payload: EvolutionWebhookPayload,
     history: list[Interaccion],
@@ -1000,37 +1007,7 @@ def _booking_flow_history(history: list[Interaccion]) -> list[dict[str, str]]:
     ]
 
 
-def _schedule_human_handover_notification(payload: EvolutionWebhookPayload, settings: Settings) -> None:
-    admin_numbers = _configured_admin_numbers(settings)
-    if not admin_numbers:
-        logger.info("Human handover notification skipped; no admin numbers configured")
-        return
-    message = _human_handover_notification_message(payload)
-    webhook_tasks: set[asyncio.Task[None]] = getattr(app.state, "webhook_tasks", set())
-    app.state.webhook_tasks = webhook_tasks
-    for admin_number in admin_numbers:
-        task = asyncio.create_task(_send_human_handover_notification(admin_number, message))
-        webhook_tasks.add(task)
-        task.add_done_callback(webhook_tasks.discard)
 
-
-async def _send_human_handover_notification(admin_number: str, message: str) -> None:
-    try:
-        await send_text_message(admin_number, message)
-    except Exception:
-        logger.exception("Human handover notification failed for admin=%s", admin_number)
-
-
-def _human_handover_notification_message(payload: EvolutionWebhookPayload) -> str:
-    sender = payload.sender or payload.remote_jid
-    push_name = payload.push_name or "No disponible"
-    return (
-        "Escalación requerida en Sofía.\n"
-        f"Cliente: {push_name}\n"
-        f"WhatsApp: {payload.remote_jid}\n"
-        f"Sender: {sender}\n"
-        f"Mensaje: {payload.message[:700]}"
-    )
 
 
 def _run_runtime_v2_shadow_evaluation(
@@ -1938,12 +1915,7 @@ async def _get_completed_booking(db: AsyncSession, whatsapp_id: str) -> CitaComp
 
 
 def _booking_proof_message(payload: EvolutionWebhookPayload) -> str:
-    details = [payload.message_type or "archivo"]
-    if payload.media_mimetype:
-        details.append(payload.media_mimetype)
-    if payload.media_filename:
-        details.append(payload.media_filename)
-    return f"{payload.message} ({' | '.join(details)})"
+    return booking_proof_message(payload)
 
 
 async def _handle_structured_booking_flow(
@@ -2120,39 +2092,15 @@ async def _analyze_media_json(
 
 
 def _appointment_confirmation_reply(booking: BookingAnalysis, settings: Settings) -> str:
-    if booking.deposit_already_paid or (booking.deposit_status or "").casefold() == "paid":
-        return (
-            f"Gracias, hermosa. Ya vi tu cita{_booking_summary_fragment(booking)} y el anticipo aparece como pagado. "
-            "Quedó todo registrado. 💗"
-        )
-    return (
-        f"Gracias, hermosa. Ya vi tu cita{_booking_summary_fragment(booking)}. "
-        f"Para asegurar tu espacio, puedes hacer tu anticipo de $200 aquí: {settings.payment_url} 💗"
-    )
+    return appointment_confirmation_reply(booking, settings)
 
 
 def _payment_confirmation_reply(booking: BookingAnalysis | None, payment: PaymentAnalysis) -> str:
-    details = []
-    if booking and booking.appointment_date:
-        details.append(booking.appointment_date)
-    if booking and booking.start_time:
-        details.append(booking.start_time)
-    context = f" para tu cita del {' '.join(details)}" if details else ""
-    return (
-        f"Gracias, hermosa. Ya quedó registrado tu anticipo{context}. "
-        "Tu lugar está asegurado y ya tengo guardado el comprobante. 💗"
-    )
+    return payment_confirmation_reply(booking, payment)
 
 
 def _booking_summary_fragment(booking: BookingAnalysis) -> str:
-    parts = []
-    if booking.appointment_date:
-        parts.append(booking.appointment_date)
-    if booking.start_time:
-        parts.append(booking.start_time)
-    if booking.services:
-        parts.append(", ".join(booking.services))
-    return f" ({' | '.join(parts)})" if parts else ""
+    return booking_summary_fragment(booking)
 
 
 def _looks_like_appointment_confirmation_context(
@@ -2160,16 +2108,7 @@ def _looks_like_appointment_confirmation_context(
     history: list[Interaccion],
     settings: Settings,
 ) -> bool:
-    if memory.score_conversion:
-        return True
-    recent = " ".join(item.content for item in history[-6:]).casefold()
-    return (
-        settings.booking_url.casefold() in recent
-        or "captura" in recent
-        or "confirmación" in recent
-        or "confirmacion" in recent
-        or "anticipo" in recent
-    )
+    return looks_like_appointment_confirmation_context(memory, history, settings)
 
 
 async def _persist_interaction(
@@ -2356,69 +2295,7 @@ def _summarize_profile(previous: str | None, user_message: str, assistant_messag
     return " ".join(fragments)[-800:] or "Cliente inició conversación con Sofía."
 
 
-def _schedule_follow_up(whatsapp_id: str, delay_seconds: int) -> None:
-    if _followups_globally_paused():
-        logger.info("Skipping follow-up scheduling because follow-ups are globally paused")
-        return
-    task = asyncio.create_task(_send_follow_up_if_no_reply(whatsapp_id, delay_seconds))
-    app.state.followup_tasks.add(task)
-    task.add_done_callback(app.state.followup_tasks.discard)
-
-
-async def _send_follow_up_if_no_reply(whatsapp_id: str, delay_seconds: int) -> None:
-    await asyncio.sleep(delay_seconds)
-    if _followups_globally_paused():
-        logger.info("Follow-up aborted because follow-ups are globally paused")
-        return
-    async with AsyncSessionLocal() as db:
-        pending = await _get_pending_booking(db, whatsapp_id)
-        completed = await _get_completed_booking(db, whatsapp_id)
-        history = await _get_contextual_history(db, whatsapp_id, pending, completed, limit=5)
-    if not _should_send_booking_follow_up(history, pending, completed, get_settings()):
-        return
-    try:
-        await send_text_message(
-            whatsapp_id,
-            "Soy Sofía de Vanity Nail Salon. ¿Pudiste elegir tu horario en la liga de agendamiento?",
-        )
-        logger.info("Follow-up sent to %s", whatsapp_id)
-    except Exception:
-        logger.exception("Follow-up failed for %s", whatsapp_id)
-
-
-def _should_send_booking_follow_up(
-    history: list[Interaccion],
-    pending: CitaPendiente | None,
-    completed: CitaCompletada | None,
-    settings: Settings,
-) -> bool:
-    if completed is not None:
-        return False
-    if pending is not None:
-        if (pending.booking_data or "").strip():
-            return False
-        if (pending.appointment_proof_message or "").strip():
-            return False
-    if not history or history[-1].role != MessageRole.assistant:
-        return False
-    last_assistant_message = history[-1].content
-    if settings.booking_url not in last_assistant_message:
-        return False
-    recent_user_context = " ".join(item.content for item in history if item.role == MessageRole.user).casefold()
-    if any(
-        phrase in recent_user_context
-        for phrase in (
-            "comprobante",
-            "captura",
-            "ya agende",
-            "ya agendé",
-            "hice cita",
-            "realicé una cita",
-            "realice una cita",
-            "confirmo la cita",
-            "te comparto",
-            "te mando",
-        )
-    ):
-        return False
-    return True
+def _should_send_booking_follow_up(history, pending, completed, settings):
+    """Wrapper for backward compatibility with tests."""
+    from app.tools.booking import should_send_booking_follow_up
+    return should_send_booking_follow_up(history, pending, completed, settings)

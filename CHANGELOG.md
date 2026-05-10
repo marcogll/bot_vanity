@@ -15,6 +15,9 @@
 - Se agregó flujo local de booking en `app/conversation/booking_flow.py`.
 - Se extrajo parsing puro de canal WhatsApp a `app/channels/whatsapp.py`.
 - Se movió `EvolutionWebhookPayload` al adaptador `app/channels/whatsapp.py`.
+- Se extrajeron notificaciones de escalación a `app/tools/notifications.py`.
+- Se extrajeron follow-ups y reglas operativas de booking a `app/tools/booking.py`.
+- Se extrajeron modelos y mensajes de capturas/comprobantes a `app/tools/proofs.py`.
 - Se renombró el generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
 
 ### Booking y escalación
@@ -35,7 +38,7 @@
 
 ### Validación
 
-- Suite completa: `124 passed, 4 warnings`.
+- Suite completa: `133 passed, 4 warnings`.
 
 ## 2026-05-01
 

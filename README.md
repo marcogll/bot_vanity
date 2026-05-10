@@ -46,7 +46,7 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 
 ```text
 app/
-  main.py                  webhook, orquestación, follow-ups, modo test
+  main.py                  webhook, orquestación, DB/LLM y modo test
   bots/runtime.py          Runtime V2 en shadow mode
   channels/whatsapp.py     payload y parsing de Evolution/WhatsApp
   conversation/
@@ -60,6 +60,10 @@ app/
   models.py                interacciones, memoria, citas, webhook events
   roles/blender.py         mezcla de roles frontdesk/manager/staff1
   tenants/                 modelos y loader de tenants
+  tools/
+    booking.py             follow-up y reglas operativas de booking
+    notifications.py       notificaciones de handover/escalación
+    proofs.py              modelos y mensajes de capturas/comprobantes
 tenants/
   vanity/business.json     configuración versionada del tenant Vanity
 docs/
@@ -517,7 +521,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-124 passed
+133 passed
 ```
 
 Comando usado en esta rama:

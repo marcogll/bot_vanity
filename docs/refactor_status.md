@@ -30,6 +30,9 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - Armado de prompt extraído a `app/conversation/prompt_builder.py`.
 - Parsing puro de canal WhatsApp extraído a `app/channels/whatsapp.py`.
 - `EvolutionWebhookPayload` movido a `app/channels/whatsapp.py`.
+- Notificaciones de escalación extraídas a `app/tools/notifications.py`.
+- Follow-up y reglas operativas de booking extraídas a `app/tools/booking.py`.
+- Modelos y mensajes de capturas/comprobantes extraídos a `app/tools/proofs.py`.
 - Renombre del generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
@@ -37,20 +40,26 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Aún pendiente
 
-- Extraer `app/tools/notifications.py` para handover/admin alerts.
-- Extraer `app/tools/booking.py` para links, follow-up y validaciones de booking.
-- Extraer capa de acciones/tools para booking, handover, pagos y notificaciones.
+- Separar adaptadores de análisis visual OpenAI para capturas/comprobantes.
+- Separar acciones de persistencia de pago/cita fuera de `main.py`.
 - Persistir `tenant_id` en modelos de base de datos.
 - Activar Runtime V2 fuera de shadow mode con allowlist.
 - Comparar formalmente respuesta V1 vs decisión/plan V2.
 - Eliminar wrapper `_ask_vanessa` cuando ya no haya dependencias internas.
 
+### Último corte completado
+
+1. ✅ Mover notificaciones de escalación a `app/tools/notifications.py`.
+2. ✅ Mover scheduling/follow-up de booking a `app/tools/booking.py`.
+3. ✅ Mover modelos/mensajes de capturas y pagos a `app/tools/proofs.py`.
+4. ✅ Mantener wrappers en `main.py`.
+5. ✅ Correr suite completa y smoke test `/health`.
+
 ### Siguiente corte recomendado
 
-1. Mover notificaciones de escalación a `app/tools/notifications.py`.
-2. Mover scheduling/follow-up de booking a `app/tools/booking.py`.
-3. Mantener wrappers en `main.py`.
-4. Correr suite completa y smoke test `/health`.
+1. Extraer prompts/adaptador OpenAI de análisis visual a una tool dedicada.
+2. Separar acciones de pago y persistencia de cita en `app/tools/payments.py`.
+3. Mantener Runtime V2 en shadow mode mientras se comparan decisiones contra V1.
 
 ## Flags relevantes
 
@@ -99,7 +108,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-124 passed, 4 warnings
+133 passed, 4 warnings
 ```
 
 Comando:

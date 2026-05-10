@@ -146,5 +146,5 @@ Resultado esperado:
 
 - V2 todavía no toma control de respuestas productivas.
 - El prompt builder ya está extraído, pero el cliente OpenAI aún se invoca desde `main.py`.
-- La capa de tools todavía no está separada.
+- La capa de tools ya cubre notificaciones, follow-up de booking y helpers puros de capturas/comprobantes. El adaptador OpenAI y la persistencia final de pagos/citas siguen en `app/main.py`.
 - Multi-tenant aún no persiste `tenant_id` en base de datos.
