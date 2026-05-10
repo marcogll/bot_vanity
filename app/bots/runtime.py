@@ -130,7 +130,7 @@ def _runtime_alignment(evaluation: RuntimeEvaluation, *, v1_flow: str, v1_reply:
     action = evaluation.decision.action
     if action == DecisionAction.ASK_LLM and v1_flow == "llm":
         return "aligned"
-    if action == DecisionAction.ESCALATE_HUMAN and v1_flow == "human_handover":
+    if action == DecisionAction.ESCALATE_HUMAN and v1_flow in {"human_handover", "runtime_v2_handover"}:
         return "aligned"
     if action == DecisionAction.SILENCE and not v1_reply.strip():
         return "aligned"

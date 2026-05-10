@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     test_mode_session_minutes: int = 15
     bot_runtime_v2_enabled: bool = False
     bot_runtime_v2_shadow_mode: bool = False
+    bot_runtime_v2_allowed_numbers: str = ""
     role_blend_enabled: bool = False
     tenant_config_path: str = "tenants"
     default_tenant_id: str = "vanity"

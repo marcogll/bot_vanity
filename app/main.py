@@ -82,6 +82,7 @@ from app.conversation.prompt_builder import (
     sanitize_history_content_for_model,
     should_attach_image_to_llm,
 )
+from app.conversation.models import DecisionAction
 from app.conversation.state import (
     PendingBookingState,
     StateMessage,
@@ -318,6 +319,19 @@ def _is_test_mode_allowed_number(whatsapp_id: str, settings: Settings) -> bool:
 
 def _should_handle_in_test_mode(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
     return _is_test_mode_allowed_number(payload.remote_jid, settings) or _is_authorized_admin(payload, settings)
+
+
+def _parse_runtime_v2_allowed_numbers(settings: Settings) -> set[str]:
+    return _parse_test_mode_allowed_numbers(settings.bot_runtime_v2_allowed_numbers)
+
+
+def _runtime_v2_is_allowed_number(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
+    allowed_numbers = _parse_runtime_v2_allowed_numbers(settings)
+    if _normalized_whatsapp_digits(payload.remote_jid) in allowed_numbers:
+        return True
+    if _is_authorized_admin(payload, settings):
+        return True
+    return bool(_is_test_mode_enabled(settings) and _is_test_mode_allowed_number(payload.remote_jid, settings))
 
 
 def _configured_admin_numbers(settings: Settings) -> set[str]:
@@ -708,6 +722,29 @@ async def _handle_webhook_payload(
         conversation_buffer=conversation_buffer,
         settings=settings,
     )
+    if _should_runtime_v2_take_control(payload, settings, runtime_v2_evaluation):
+        runtime_v2_outcome = _runtime_v2_control_outcome(runtime_v2_evaluation)
+        if runtime_v2_outcome is not None:
+            runtime_v2_flow, runtime_v2_reply = runtime_v2_outcome
+            if runtime_v2_reply is None:
+                _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow=runtime_v2_flow, v1_reply="")
+                logger.info("Runtime V2 silenced reply: remote_jid=%s flow=%s", payload.remote_jid, runtime_v2_flow)
+                return
+            await _persist_interaction(
+                db,
+                payload.remote_jid,
+                payload.push_name,
+                payload.message,
+                runtime_v2_reply,
+                tenant_id=_tenant_id(settings),
+            )
+            _schedule_test_session_export(payload.remote_jid, settings)
+            if runtime_v2_flow == "runtime_v2_handover":
+                schedule_human_handover_notification(payload, app.state, settings=settings)
+            _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow=runtime_v2_flow, v1_reply=runtime_v2_reply)
+            await _send_reply(payload, runtime_v2_reply)
+            logger.info("Reply sent: remote_jid=%s flow=%s", payload.remote_jid, runtime_v2_flow)
+            return
     if _should_send_initial_greeting(history, memory, payload):
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "new", INITIAL_GREETING_REPLY)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY, tenant_id=_tenant_id(settings))
@@ -1065,7 +1102,7 @@ def _run_runtime_v2_shadow_evaluation(
     conversation_buffer: ConversationBuffer | None,
     settings: Settings,
 ) -> RuntimeEvaluation | None:
-    if not _should_run_runtime_v2_shadow(settings):
+    if not settings.bot_runtime_v2_enabled:
         return None
     try:
         tenant_config = load_tenant_config(settings.default_tenant_id, settings.tenant_config_path)
@@ -1100,8 +1137,10 @@ def _run_runtime_v2_shadow_evaluation(
         return None
 
     role_blend = evaluation.role_blend
+    mode = "shadow" if settings.bot_runtime_v2_shadow_mode else "control_candidate"
     logger.info(
-        "Runtime V2 shadow: remote_jid=%s tenant=%s state=%s intent=%s decision=%s reason=%s plan=%s dominant_role=%s role_weights=%s",
+        "Runtime V2 %s: remote_jid=%s tenant=%s state=%s intent=%s decision=%s reason=%s plan=%s dominant_role=%s role_weights=%s",
+        mode,
         payload.remote_jid,
         evaluation.context.tenant_id,
         evaluation.context.state.value,
@@ -1139,6 +1178,30 @@ def _log_runtime_v2_comparison(
 
 def _should_run_runtime_v2_shadow(settings: Settings) -> bool:
     return bool(settings.bot_runtime_v2_enabled and settings.bot_runtime_v2_shadow_mode)
+
+
+def _should_runtime_v2_take_control(
+    payload: EvolutionWebhookPayload,
+    settings: Settings,
+    evaluation: RuntimeEvaluation | None,
+) -> bool:
+    return bool(
+        evaluation is not None
+        and settings.bot_runtime_v2_enabled
+        and not settings.bot_runtime_v2_shadow_mode
+        and _runtime_v2_is_allowed_number(payload, settings)
+    )
+
+
+def _runtime_v2_control_outcome(evaluation: RuntimeEvaluation) -> tuple[str, str | None] | None:
+    decision = evaluation.decision
+    if decision.action == DecisionAction.SILENCE:
+        return ("runtime_v2_silence", None)
+    if decision.action == DecisionAction.ESCALATE_HUMAN and decision.structured_reply:
+        return ("runtime_v2_handover", decision.structured_reply)
+    if decision.action == DecisionAction.RESPOND and decision.structured_reply:
+        return ("runtime_v2_structured_reply", decision.structured_reply)
+    return None
 
 
 def _runtime_v2_media_metadata(payload: EvolutionWebhookPayload) -> dict[str, object]:

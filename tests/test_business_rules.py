@@ -62,7 +62,10 @@ from app.main import (
     _should_export_test_session_for_number,
     _is_supported_message_event,
     _runtime_v2_media_metadata,
+    _runtime_v2_control_outcome,
+    _runtime_v2_is_allowed_number,
     _should_run_runtime_v2_shadow,
+    _should_runtime_v2_take_control,
     _technical_fallback_reply,
     _webhook_dedupe_key,
     ConversationBuffer,
@@ -143,6 +146,46 @@ def test_runtime_v2_shadow_requires_enabled_and_shadow_flags() -> None:
 
     assert _should_run_runtime_v2_shadow(enabled)
     assert not _should_run_runtime_v2_shadow(disabled)
+
+
+def test_runtime_v2_control_requires_enabled_non_shadow_and_allowed_number() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "bot_runtime_v2_enabled": True,
+            "bot_runtime_v2_shadow_mode": False,
+            "bot_runtime_v2_allowed_numbers": "528441112233",
+            "admin_phone_number": "",
+            "admin_phone_numbers": "",
+            "test_mode_enabled": False,
+            "test_mode_allowed_numbers": "",
+        },
+    )()
+    payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="Hola")
+
+    assert _runtime_v2_is_allowed_number(payload, settings)
+    assert _should_runtime_v2_take_control(payload, settings, object())
+
+
+def test_runtime_v2_control_blocks_unlisted_number() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "bot_runtime_v2_enabled": True,
+            "bot_runtime_v2_shadow_mode": False,
+            "bot_runtime_v2_allowed_numbers": "528449999999",
+            "admin_phone_number": "",
+            "admin_phone_numbers": "",
+            "test_mode_enabled": False,
+            "test_mode_allowed_numbers": "",
+        },
+    )()
+    payload = EvolutionWebhookPayload(remoteJid="5218441112233@s.whatsapp.net", message="Hola")
+
+    assert not _runtime_v2_is_allowed_number(payload, settings)
+    assert not _should_runtime_v2_take_control(payload, settings, object())
 
 
 def test_runtime_v2_media_metadata_omits_none_values() -> None:

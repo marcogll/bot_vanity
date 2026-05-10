@@ -185,6 +185,7 @@ Esta rama avanza el refactor `Sofia Role Runtime` de forma incremental. El Runti
 ```env
 BOT_RUNTIME_V2_ENABLED=false
 BOT_RUNTIME_V2_SHADOW_MODE=false
+BOT_RUNTIME_V2_ALLOWED_NUMBERS=
 ROLE_BLEND_ENABLED=false
 TENANT_CONFIG_PATH=tenants
 DEFAULT_TENANT_ID=vanity
@@ -194,7 +195,8 @@ Comportamiento:
 
 - con `BOT_RUNTIME_V2_ENABLED=true` y `BOT_RUNTIME_V2_SHADOW_MODE=true`, V2 evalúa contexto, intención, política, plan de respuesta y roles
 - V1 sigue enviando la respuesta real
-- V2 solo escribe logs `Runtime V2 shadow: ...`
+- V2 escribe logs `Runtime V2 shadow: ...` y `Runtime V2 comparison: ...`
+- con `BOT_RUNTIME_V2_ENABLED=true`, `BOT_RUNTIME_V2_SHADOW_MODE=false` y `BOT_RUNTIME_V2_ALLOWED_NUMBERS`, V2 puede tomar control solo para respuestas determinísticas: silencio, handover y respuestas estructuradas; si requiere LLM, cae a V1
 - `ROLE_BLEND_ENABLED=true` activa mezcla de `frontdesk`, `manager` y `staff1` según estado conversacional
 
 Módulos principales:
@@ -525,7 +527,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-144 passed
+146 passed
 ```
 
 Comando usado en esta rama:

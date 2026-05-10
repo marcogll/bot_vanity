@@ -37,6 +37,7 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - Adaptador OpenAI de análisis visual extraído a `app/tools/vision.py`.
 - `tenant_id` persistido en historial, memoria, citas y eventos webhook.
 - Comparación V1/V2 registrada en shadow mode con estado, intención, acción y alineación.
+- Runtime V2 puede tomar control limitado con allowlist para decisiones determinísticas.
 - Renombre del generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
@@ -44,7 +45,6 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Aún pendiente
 
-- Activar Runtime V2 fuera de shadow mode con allowlist.
 - Eliminar wrapper `_ask_vanessa` cuando ya no haya dependencias internas.
 
 ### Último corte completado
@@ -56,20 +56,22 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 5. ✅ Mover prompts/adaptador OpenAI de análisis visual a `app/tools/vision.py`.
 6. ✅ Persistir `tenant_id` en modelos de base de datos y migración idempotente.
 7. ✅ Comparar respuesta V1 vs decisión/plan V2 en shadow mode.
-8. ✅ Mantener wrappers en `main.py`.
-9. ✅ Correr suite completa y smoke test `/health`.
+8. ✅ Activar Runtime V2 fuera de shadow mode con allowlist para decisiones determinísticas.
+9. ✅ Mantener wrappers en `main.py`.
+10. ✅ Correr suite completa y smoke test `/health`.
 
 ### Siguiente corte recomendado
 
-1. Mantener Runtime V2 en shadow mode mientras se comparan decisiones contra V1.
-2. Activar Runtime V2 fuera de shadow mode con allowlist.
-3. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
+1. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
+2. Ampliar control Runtime V2 para generación LLM cuando el plan V2 ya cubra prompts completos.
+3. Evaluar migración formal con Alembic si el esquema empieza a crecer.
 
 ## Flags relevantes
 
 ```env
 BOT_RUNTIME_V2_ENABLED=false
 BOT_RUNTIME_V2_SHADOW_MODE=false
+BOT_RUNTIME_V2_ALLOWED_NUMBERS=
 ROLE_BLEND_ENABLED=false
 TENANT_CONFIG_PATH=tenants
 DEFAULT_TENANT_ID=vanity
@@ -86,6 +88,7 @@ Con `BOT_RUNTIME_V2_ENABLED=true` y `BOT_RUNTIME_V2_SHADOW_MODE=true`:
 - V2 evalúa contexto, intención, estado, política, plan y roles.
 - V2 no envía mensajes.
 - El resultado se registra en logs con el prefijo `Runtime V2 shadow:`.
+- Si `BOT_RUNTIME_V2_SHADOW_MODE=false`, V2 solo toma control para números en `BOT_RUNTIME_V2_ALLOWED_NUMBERS`, admins o test mode, y únicamente en decisiones determinísticas.
 
 ## Flujo estructurado de booking
 
@@ -112,7 +115,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-144 passed, 4 warnings
+146 passed, 4 warnings
 ```
 
 Comando:

@@ -7,6 +7,7 @@
 ```env
 BOT_RUNTIME_V2_ENABLED=false
 BOT_RUNTIME_V2_SHADOW_MODE=false
+BOT_RUNTIME_V2_ALLOWED_NUMBERS=
 ROLE_BLEND_ENABLED=false
 ```
 
@@ -21,6 +22,17 @@ ROLE_BLEND_ENABLED=true
 ```
 
 Usar para observar decisiones V2 sin cambiar respuestas al cliente.
+
+### Control limitado con allowlist
+
+```env
+BOT_RUNTIME_V2_ENABLED=true
+BOT_RUNTIME_V2_SHADOW_MODE=false
+BOT_RUNTIME_V2_ALLOWED_NUMBERS=528448087770,528445949068
+ROLE_BLEND_ENABLED=true
+```
+
+Con esta configuración V2 solo toma control en números permitidos, admins o teléfonos de test mode. El control está limitado a decisiones determinísticas: silencio, handover y respuestas estructuradas. Si V2 decide `ask_llm`, el flujo sigue usando V1.
 
 ### Test mode
 
