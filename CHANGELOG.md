@@ -23,7 +23,8 @@
 - Se agregó `tenant_id` a historial, memoria, citas y eventos webhook, con migración idempotente en `init_db`.
 - Se agregó comparación auditada entre respuesta V1 y decisión Runtime V2 en shadow mode.
 - Se habilitó control limitado de Runtime V2 con allowlist para decisiones determinísticas.
-- Se renombró el generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
+- Se renombró y consolidó el generador principal como `generate_assistant_reply`.
+- Se eliminaron wrappers temporales de `main.py` para helpers ya extraídos a tools.
 
 ### Booking y escalación
 

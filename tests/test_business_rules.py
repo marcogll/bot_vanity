@@ -1,18 +1,14 @@
 from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
-    BookingAnalysis,
     BOOKING_CONVERSATION_CONTEXT_HOURS,
     DEFAULT_CONVERSATION_CONTEXT_HOURS,
     EvolutionWebhookPayload,
     INITIAL_GREETING_REPLY,
     MANUAL_TEAM_INTERVENTION_MARKER,
     MEMORY_DELETE_CONFIRMATION_REPLY,
-    PaymentAnalysis,
-    _appointment_confirmation_reply,
     _build_test_session_export_payload,
     _build_user_content,
-    _booking_proof_message,
     _clear_memory_delete_pending,
     _conversation_context_cutoff,
     _derive_conversation_state,
@@ -36,13 +32,11 @@ from app.main import (
     _parse_test_mode_allowed_numbers,
     _mark_memory_delete_pending,
     _media_prompt_hint,
-    _payment_confirmation_reply,
     _format_whatsapp_reply,
     _is_visual_reference_request,
     _strip_data_url_prefix,
     _sanitize_assistant_reply_for_user,
     _sanitize_history_content_for_model,
-    _looks_like_appointment_confirmation_context,
     _looks_like_booking_or_payment_artifact,
     _name_and_service_followup_reply,
     _has_advanced_conversation_context,
@@ -74,6 +68,14 @@ from app.main import (
 from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria
 from app.pricing import estimate_from_message
 from app.security import _matches_webhook_secret, looks_like_prompt_injection
+from app.tools.proofs import (
+    BookingAnalysis,
+    PaymentAnalysis,
+    appointment_confirmation_reply,
+    booking_proof_message,
+    looks_like_appointment_confirmation_context,
+    payment_confirmation_reply,
+)
 
 
 def test_prompt_injection_marker_is_detected() -> None:
@@ -432,7 +434,7 @@ def test_booking_checkpoint_detects_confirmation_context() -> None:
         )()
     ]
 
-    assert _looks_like_appointment_confirmation_context(memory, history, settings)
+    assert looks_like_appointment_confirmation_context(memory, history, settings)
 
 
 def test_booking_proof_message_summarizes_media_metadata() -> None:
@@ -445,7 +447,7 @@ def test_booking_proof_message_summarizes_media_metadata() -> None:
         hasMedia=True,
     )
 
-    proof = _booking_proof_message(payload)
+    proof = booking_proof_message(payload)
 
     assert "imageMessage" in proof
     assert "image/jpeg" in proof
@@ -462,7 +464,7 @@ def test_appointment_confirmation_reply_requests_deposit_when_missing() -> None:
         deposit_status="pending",
     )
 
-    reply = _appointment_confirmation_reply(booking, settings)
+    reply = appointment_confirmation_reply(booking, settings)
 
     assert "anticipo de $200" in reply
     assert "https://pay.example/test" in reply
@@ -472,7 +474,7 @@ def test_payment_confirmation_reply_confirms_saved_deposit() -> None:
     booking = BookingAnalysis(booking_confirmed=True, appointment_date="2026-04-20", start_time="3:30 p. m.")
     payment = PaymentAnalysis(payment_detected=True, transaction_id="ABC123", deposit_status="paid")
 
-    reply = _payment_confirmation_reply(booking, payment)
+    reply = payment_confirmation_reply(booking, payment)
 
     assert "Ya quedó registrado tu anticipo" in reply
     assert "2026-04-20" in reply

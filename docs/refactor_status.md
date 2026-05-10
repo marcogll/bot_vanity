@@ -38,14 +38,15 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - `tenant_id` persistido en historial, memoria, citas y eventos webhook.
 - Comparación V1/V2 registrada en shadow mode con estado, intención, acción y alineación.
 - Runtime V2 puede tomar control limitado con allowlist para decisiones determinísticas.
-- Renombre del generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
+- Generador principal consolidado como `generate_assistant_reply`.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
 - README y `.env.example` actualizados para este branch.
 
 ### Aún pendiente
 
-- Eliminar wrapper `_ask_vanessa` cuando ya no haya dependencias internas.
+- Ampliar Runtime V2 para generación LLM completa si se decide que V2 tome control de conversaciones abiertas.
+- Evaluar migración formal con Alembic si el esquema sigue creciendo.
 
 ### Último corte completado
 
@@ -57,14 +58,14 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 6. ✅ Persistir `tenant_id` en modelos de base de datos y migración idempotente.
 7. ✅ Comparar respuesta V1 vs decisión/plan V2 en shadow mode.
 8. ✅ Activar Runtime V2 fuera de shadow mode con allowlist para decisiones determinísticas.
-9. ✅ Mantener wrappers en `main.py`.
+9. ✅ Eliminar wrappers temporales de `main.py` que ya no tenían dependencias internas.
 10. ✅ Correr suite completa y smoke test `/health`.
 
 ### Siguiente corte recomendado
 
-1. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
-2. Ampliar control Runtime V2 para generación LLM cuando el plan V2 ya cubra prompts completos.
-3. Evaluar migración formal con Alembic si el esquema empieza a crecer.
+1. Ampliar control Runtime V2 para generación LLM cuando el plan V2 ya cubra prompts completos.
+2. Evaluar migración formal con Alembic si el esquema empieza a crecer.
+3. Migrar `startup/shutdown` de FastAPI a lifespan para eliminar warnings.
 
 ## Flags relevantes
 

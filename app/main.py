@@ -24,24 +24,17 @@ from app.bots.runtime import RuntimeEvaluation, compare_runtime_to_reply
 from app.business_rules import human_handover_reply, needs_human_handover
 from app.tools.booking import schedule_follow_up
 from app.tools.notifications import schedule_human_handover_notification
-from app.tools.payments import (
-    apply_booking_analysis_to_pending,
-    complete_pending_booking_with_payment,
-    deserialize_model,
-    serialize_model,
-)
+from app.tools.payments import apply_booking_analysis_to_pending, complete_pending_booking_with_payment, deserialize_model
 from app.tools.proofs import (
     BookingAnalysis,
     PaymentAnalysis,
     appointment_confirmation_reply,
     booking_proof_message,
-    booking_summary_fragment,
     looks_like_appointment_confirmation_context,
     payment_confirmation_reply,
 )
 from app.tools.vision import (
     analyze_booking_confirmation_image,
-    analyze_media_json,
     analyze_payment_proof_image,
 )
 from app.catalog_sync import sync_service_catalog_from_docs
@@ -884,26 +877,6 @@ async def generate_assistant_reply(
         logger.warning("OpenAI returned an empty response")
         return _technical_fallback_reply(payload, history)
     return content.strip()
-
-
-async def _ask_vanessa(
-    settings: Settings,
-    payload: EvolutionWebhookPayload,
-    memory: SesionMemoria,
-    history: list[Interaccion],
-    pending: CitaPendiente | None,
-    completed: CitaCompletada | None,
-    conversation_buffer: ConversationBuffer | None = None,
-) -> str:
-    return await generate_assistant_reply(
-        settings,
-        payload,
-        memory,
-        history,
-        pending,
-        completed,
-        conversation_buffer,
-    )
 
 
 def _build_user_content(
@@ -1952,7 +1925,7 @@ def _booking_appointment_end_utc(
 ) -> datetime | None:
     booking_payload = pending.booking_data if pending is not None else None
     if booking_payload:
-        booking = _deserialize_model(BookingAnalysis, booking_payload)
+        booking = deserialize_model(BookingAnalysis, booking_payload)
         if isinstance(booking, BookingAnalysis):
             return _appointment_end_utc_from_parts(booking.appointment_date, booking.end_time or booking.start_time)
     if completed is not None:
@@ -2033,10 +2006,10 @@ async def _record_booking_checkpoint(
     if pending:
         return
 
-    if not _looks_like_appointment_confirmation_context(memory, history, settings):
+    if not looks_like_appointment_confirmation_context(memory, history, settings):
         return
 
-    proof_message = _booking_proof_message(payload)
+    proof_message = booking_proof_message(payload)
     pending = CitaPendiente(
         tenant_id=tenant_id,
         whatsapp_id=payload.remote_jid,
@@ -2068,10 +2041,6 @@ async def _get_completed_booking(db: AsyncSession, whatsapp_id: str, tenant_id: 
     return result.scalar_one_or_none()
 
 
-def _booking_proof_message(payload: EvolutionWebhookPayload) -> str:
-    return booking_proof_message(payload)
-
-
 async def _handle_structured_booking_flow(
     db: AsyncSession,
     payload: EvolutionWebhookPayload,
@@ -2096,13 +2065,13 @@ async def _handle_structured_booking_flow(
             payment,
             whatsapp_id=payload.remote_jid,
             push_name=payload.push_name,
-            payment_proof_message=_booking_proof_message(payload),
+            payment_proof_message=booking_proof_message(payload),
             fallback_service_interest=memory.servicio_interes,
         )
         logger.info("Booking moved from pending to completed for %s", payload.remote_jid)
-        return _payment_confirmation_reply(booking, payment)
+        return payment_confirmation_reply(booking, payment)
 
-    if not pending and not _looks_like_appointment_confirmation_context(memory, history, settings):
+    if not pending and not looks_like_appointment_confirmation_context(memory, history, settings):
         return None
 
     booking = await _analyze_booking_confirmation(payload, settings)
@@ -2117,15 +2086,7 @@ async def _handle_structured_booking_flow(
         booking,
         fallback_service_interest=memory.servicio_interes,
     )
-    return _appointment_confirmation_reply(booking, settings)
-
-
-def _serialize_model(model: BaseModel | None) -> str | None:
-    return serialize_model(model)
-
-
-def _deserialize_model(model_cls: type[BaseModel], payload: str | None) -> BaseModel | None:
-    return deserialize_model(model_cls, payload)
+    return appointment_confirmation_reply(booking, settings)
 
 
 async def _analyze_booking_confirmation(
@@ -2148,41 +2109,6 @@ async def _analyze_payment_proof(
         settings,
         remote_jid=payload.remote_jid,
     )
-
-
-async def _analyze_media_json(
-    payload: EvolutionWebhookPayload,
-    settings: Settings,
-    prompt: str,
-    model_cls: type[BaseModel],
-) -> BaseModel | None:
-    return await analyze_media_json(
-        _image_media_data_url(payload),
-        settings,
-        prompt,
-        model_cls,
-        remote_jid=payload.remote_jid,
-    )
-
-
-def _appointment_confirmation_reply(booking: BookingAnalysis, settings: Settings) -> str:
-    return appointment_confirmation_reply(booking, settings)
-
-
-def _payment_confirmation_reply(booking: BookingAnalysis | None, payment: PaymentAnalysis) -> str:
-    return payment_confirmation_reply(booking, payment)
-
-
-def _booking_summary_fragment(booking: BookingAnalysis) -> str:
-    return booking_summary_fragment(booking)
-
-
-def _looks_like_appointment_confirmation_context(
-    memory: SesionMemoria,
-    history: list[Interaccion],
-    settings: Settings,
-) -> bool:
-    return looks_like_appointment_confirmation_context(memory, history, settings)
 
 
 async def _persist_interaction(
