@@ -32,6 +32,7 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - `EvolutionWebhookPayload` movido a `app/channels/whatsapp.py`.
 - Notificaciones de escalación extraídas a `app/tools/notifications.py`.
 - Follow-up y reglas operativas de booking extraídas a `app/tools/booking.py`.
+- Persistencia de pagos y finalización de citas extraída a `app/tools/payments.py`.
 - Modelos y mensajes de capturas/comprobantes extraídos a `app/tools/proofs.py`.
 - Adaptador OpenAI de análisis visual extraído a `app/tools/vision.py`.
 - Renombre del generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
@@ -41,7 +42,6 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Aún pendiente
 
-- Separar acciones de persistencia de pago/cita fuera de `main.py`.
 - Persistir `tenant_id` en modelos de base de datos.
 - Activar Runtime V2 fuera de shadow mode con allowlist.
 - Comparar formalmente respuesta V1 vs decisión/plan V2.
@@ -51,16 +51,17 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 1. ✅ Mover notificaciones de escalación a `app/tools/notifications.py`.
 2. ✅ Mover scheduling/follow-up de booking a `app/tools/booking.py`.
-3. ✅ Mover modelos/mensajes de capturas y pagos a `app/tools/proofs.py`.
-4. ✅ Mover prompts/adaptador OpenAI de análisis visual a `app/tools/vision.py`.
-5. ✅ Mantener wrappers en `main.py`.
-6. ✅ Correr suite completa y smoke test `/health`.
+3. ✅ Mover persistencia de pagos/finalización de citas a `app/tools/payments.py`.
+4. ✅ Mover modelos/mensajes de capturas y pagos a `app/tools/proofs.py`.
+5. ✅ Mover prompts/adaptador OpenAI de análisis visual a `app/tools/vision.py`.
+6. ✅ Mantener wrappers en `main.py`.
+7. ✅ Correr suite completa y smoke test `/health`.
 
 ### Siguiente corte recomendado
 
-1. Separar acciones de pago y persistencia de cita en `app/tools/payments.py`.
-2. Mantener Runtime V2 en shadow mode mientras se comparan decisiones contra V1.
-3. Preparar `tenant_id` en modelos de base de datos.
+1. Mantener Runtime V2 en shadow mode mientras se comparan decisiones contra V1.
+2. Preparar `tenant_id` en modelos de base de datos.
+3. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
 
 ## Flags relevantes
 
@@ -109,7 +110,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-137 passed, 4 warnings
+139 passed, 4 warnings
 ```
 
 Comando:

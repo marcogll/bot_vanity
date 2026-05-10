@@ -23,6 +23,12 @@ from app.bots import BotRuntimeV2
 from app.business_rules import human_handover_reply, needs_human_handover
 from app.tools.booking import schedule_follow_up
 from app.tools.notifications import schedule_human_handover_notification
+from app.tools.payments import (
+    apply_booking_analysis_to_pending,
+    complete_pending_booking_with_payment,
+    deserialize_model,
+    serialize_model,
+)
 from app.tools.proofs import (
     BookingAnalysis,
     PaymentAnalysis,
@@ -1940,34 +1946,15 @@ async def _handle_structured_booking_flow(
         if not payment or not payment.payment_detected:
             return None
 
-        completed = CitaCompletada(
+        _, booking = await complete_pending_booking_with_payment(
+            db,
+            pending,
+            payment,
             whatsapp_id=payload.remote_jid,
-            push_name=payload.push_name or pending.push_name,
-            appointment_proof_message=pending.appointment_proof_message,
+            push_name=payload.push_name,
             payment_proof_message=_booking_proof_message(payload),
-            servicio_interes=pending.servicio_interes or memory.servicio_interes,
-            appointment_proof_received_at=pending.appointment_proof_received_at,
+            fallback_service_interest=memory.servicio_interes,
         )
-        completed.booking_data = pending.booking_data
-        completed.payment_data = _serialize_model(payment)
-        completed.booking_status = pending.booking_status or "booked"
-        completed.deposit_status = payment.deposit_status or "paid"
-        booking = _deserialize_model(BookingAnalysis, pending.booking_data)
-        if booking:
-            completed.servicios = json.dumps(booking.services, ensure_ascii=True)
-            completed.total_amount = booking.total_amount
-            completed.currency = booking.currency
-            completed.appointment_date = booking.appointment_date
-            completed.start_time = booking.start_time
-            completed.end_time = booking.end_time
-            completed.branch_name = booking.branch_name
-        completed.paypal_transaction_id = payment.transaction_id
-        completed.paypal_transaction_status = payment.transaction_status
-        completed.paypal_payer_name = payment.payer_name
-        completed.paypal_amount = payment.amount
-        completed.paypal_currency = payment.currency
-        db.add(completed)
-        await db.delete(pending)
         logger.info("Booking moved from pending to completed for %s", payload.remote_jid)
         return _payment_confirmation_reply(booking, payment)
 
@@ -1981,29 +1968,20 @@ async def _handle_structured_booking_flow(
     pending = pending or await _get_pending_booking(db, payload.remote_jid)
     if not pending:
         return None
-    pending.booking_data = _serialize_model(booking)
-    pending.booking_status = booking.booking_status or "booked"
-    pending.deposit_status = booking.deposit_status or ("paid" if booking.deposit_already_paid else "pending")
-    pending.servicio_interes = (
-        ", ".join(booking.services) if booking.services else pending.servicio_interes or memory.servicio_interes
+    apply_booking_analysis_to_pending(
+        pending,
+        booking,
+        fallback_service_interest=memory.servicio_interes,
     )
     return _appointment_confirmation_reply(booking, settings)
 
 
 def _serialize_model(model: BaseModel | None) -> str | None:
-    if model is None:
-        return None
-    return model.model_dump_json(exclude_none=True)
+    return serialize_model(model)
 
 
 def _deserialize_model(model_cls: type[BaseModel], payload: str | None) -> BaseModel | None:
-    if not payload:
-        return None
-    try:
-        return model_cls.model_validate_json(payload)
-    except Exception:
-        logger.warning("Unable to decode stored model payload for %s", model_cls.__name__)
-        return None
+    return deserialize_model(model_cls, payload)
 
 
 async def _analyze_booking_confirmation(

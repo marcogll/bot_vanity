@@ -17,6 +17,7 @@
 - Se movió `EvolutionWebhookPayload` al adaptador `app/channels/whatsapp.py`.
 - Se extrajeron notificaciones de escalación a `app/tools/notifications.py`.
 - Se extrajeron follow-ups y reglas operativas de booking a `app/tools/booking.py`.
+- Se extrajo persistencia de pagos y finalización de citas a `app/tools/payments.py`.
 - Se extrajeron modelos y mensajes de capturas/comprobantes a `app/tools/proofs.py`.
 - Se extrajo el adaptador OpenAI de análisis visual a `app/tools/vision.py`.
 - Se renombró el generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
@@ -39,7 +40,7 @@
 
 ### Validación
 
-- Suite completa: `137 passed, 4 warnings`.
+- Suite completa: `139 passed, 4 warnings`.
 
 ## 2026-05-01
 

@@ -63,6 +63,7 @@ app/
   tools/
     booking.py             follow-up y reglas operativas de booking
     notifications.py       notificaciones de handover/escalación
+    payments.py            persistencia de pagos y finalización de citas
     proofs.py              modelos y mensajes de capturas/comprobantes
     vision.py              análisis visual estructurado con OpenAI
 tenants/
@@ -522,7 +523,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-137 passed
+139 passed
 ```
 
 Comando usado en esta rama:

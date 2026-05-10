@@ -146,5 +146,5 @@ Resultado esperado:
 
 - V2 todavía no toma control de respuestas productivas.
 - El prompt builder ya está extraído. `main.py` conserva la orquestación de llamadas LLM generales, mientras el análisis visual estructurado vive en `app/tools/vision.py`.
-- La capa de tools ya cubre notificaciones, follow-up de booking, helpers puros de capturas/comprobantes y análisis visual estructurado. La persistencia final de pagos/citas sigue en `app/main.py`.
+- La capa de tools ya cubre notificaciones, follow-up de booking, persistencia de pagos/citas, helpers puros de capturas/comprobantes y análisis visual estructurado.
 - Multi-tenant aún no persiste `tenant_id` en base de datos.
