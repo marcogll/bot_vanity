@@ -207,7 +207,7 @@ async def webhook(
             logger.warning("Ignoring self-sent outbound webhook for %s", payload.remote_jid)
             return WebhookResponse(message="ignored")
         logger.warning("Logging manual outbound webhook for %s", payload.remote_jid)
-        _schedule_outbound_logging(payload)
+        _schedule_outbound_logging(payload, settings)
         return WebhookResponse(message="logged")
     if not payload.remote_jid or not payload.message.strip():
         raw_body = (await request.body()).decode("utf-8", errors="replace")
@@ -230,7 +230,7 @@ async def webhook(
         )
     if rate_limiter is not None:
         rate_limiter.check(payload.remote_jid)
-    if await _is_duplicate_webhook(payload):
+    if await _is_duplicate_webhook(payload, settings):
         logger.warning(
             "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
             payload.remote_jid,
@@ -256,13 +256,13 @@ def _schedule_webhook_processing(payload: EvolutionWebhookPayload, settings: Set
     task.add_done_callback(app.state.webhook_tasks.discard)
 
 
-def _schedule_outbound_logging(payload: EvolutionWebhookPayload) -> None:
-    task = asyncio.create_task(_process_outbound_webhook(payload))
+def _schedule_outbound_logging(payload: EvolutionWebhookPayload, settings: Settings) -> None:
+    task = asyncio.create_task(_process_outbound_webhook(payload, settings))
     app.state.webhook_tasks.add(task)
     task.add_done_callback(app.state.webhook_tasks.discard)
 
 
-async def _is_duplicate_webhook(payload: EvolutionWebhookPayload) -> bool:
+async def _is_duplicate_webhook(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
     dedupe_key = _webhook_dedupe_key(payload)
     if not dedupe_key:
         return False
@@ -273,6 +273,7 @@ async def _is_duplicate_webhook(payload: EvolutionWebhookPayload) -> bool:
         return True
     async with AsyncSessionLocal() as db:
         event = WebhookEvent(
+            tenant_id=_tenant_id(settings),
             event_kind="inbound",
             whatsapp_id=payload.remote_jid,
             instance_name=payload.instance_name,
@@ -326,6 +327,11 @@ def _configured_admin_numbers(settings: Settings) -> set[str]:
     return candidates
 
 
+def _tenant_id(settings: Settings | None = None) -> str:
+    active_settings = settings or get_settings()
+    return active_settings.default_tenant_id.strip() or "vanity"
+
+
 def _get_conversation_buffer(whatsapp_id: str) -> ConversationBuffer:
     buffers: OrderedDict[str, ConversationBuffer] = getattr(app.state, "conversation_buffers", OrderedDict())
     app.state.conversation_buffers = buffers
@@ -363,6 +369,7 @@ async def _is_rate_limited(whatsapp_id: str, settings: Settings) -> bool:
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(func.count(Interaccion.id)).where(
+                Interaccion.tenant_id == _tenant_id(settings),
                 Interaccion.whatsapp_id == whatsapp_id,
                 Interaccion.role == MessageRole.user,
                 Interaccion.timestamp >= cutoff,
@@ -381,6 +388,7 @@ def _schedule_test_session_export(whatsapp_id: str, settings: Settings) -> None:
     task = asyncio.create_task(
         _export_test_session_if_idle(
             whatsapp_id=whatsapp_id,
+            tenant_id=_tenant_id(settings),
             delay_seconds=delay_seconds,
             webhook_url=settings.test_mode_export_webhook_url,
             auth_header=settings.test_mode_export_webhook_auth_header,
@@ -405,6 +413,7 @@ def _should_export_test_session_for_number(whatsapp_id: str, settings: Settings)
 
 async def _export_test_session_if_idle(
     whatsapp_id: str,
+    tenant_id: str,
     delay_seconds: int,
     webhook_url: str,
     auth_header: str,
@@ -412,18 +421,18 @@ async def _export_test_session_if_idle(
 ) -> None:
     await asyncio.sleep(delay_seconds)
     async with AsyncSessionLocal() as db:
-        history = await _get_full_history(db, whatsapp_id)
+        history = await _get_full_history(db, whatsapp_id, tenant_id=tenant_id)
         if not history:
             return
         latest_timestamp = history[-1].timestamp
         if latest_timestamp > datetime.now(UTC) - timedelta(seconds=delay_seconds):
             return
         export_key = _test_session_export_key(whatsapp_id, latest_timestamp)
-        if not await _claim_test_export_lock(db, export_key, whatsapp_id):
+        if not await _claim_test_export_lock(db, export_key, whatsapp_id, tenant_id):
             return
-        memory = await _get_memory(db, whatsapp_id)
-        pending = await _get_pending_booking(db, whatsapp_id)
-        completed = await _get_completed_booking(db, whatsapp_id)
+        memory = await _get_memory(db, whatsapp_id, tenant_id=tenant_id)
+        pending = await _get_pending_booking(db, whatsapp_id, tenant_id=tenant_id)
+        completed = await _get_completed_booking(db, whatsapp_id, tenant_id=tenant_id)
         payload = _build_test_session_export_payload(
             whatsapp_id=whatsapp_id,
             history=history,
@@ -439,7 +448,7 @@ async def _export_test_session_if_idle(
         await _release_test_export_lock(export_key)
         return
     async with AsyncSessionLocal() as db:
-        await _purge_chat_records(db, whatsapp_id)
+        await _purge_chat_records(db, whatsapp_id, tenant_id=tenant_id)
         await db.commit()
     logger.info("Exported and purged test session for %s", whatsapp_id)
 
@@ -448,9 +457,10 @@ def _test_session_export_key(whatsapp_id: str, latest_timestamp: datetime) -> st
     return f"test-export:{whatsapp_id}:{latest_timestamp.isoformat()}"
 
 
-async def _claim_test_export_lock(db: AsyncSession, export_key: str, whatsapp_id: str) -> bool:
+async def _claim_test_export_lock(db: AsyncSession, export_key: str, whatsapp_id: str, tenant_id: str = "vanity") -> bool:
     db.add(
         WebhookEvent(
+            tenant_id=tenant_id,
             event_kind="test_export",
             whatsapp_id=whatsapp_id,
             event_key=export_key,
@@ -499,10 +509,10 @@ async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: S
             logger.exception("Webhook processing failed for %s", payload.remote_jid)
 
 
-async def _process_outbound_webhook(payload: EvolutionWebhookPayload) -> None:
+async def _process_outbound_webhook(payload: EvolutionWebhookPayload, settings: Settings) -> None:
     async with AsyncSessionLocal() as db:
         try:
-            await _handle_outbound_webhook_payload(payload, db)
+            await _handle_outbound_webhook_payload(payload, db, settings)
         except Exception:
             logger.exception("Outbound webhook logging failed for %s", payload.remote_jid)
 
@@ -510,13 +520,14 @@ async def _process_outbound_webhook(payload: EvolutionWebhookPayload) -> None:
 async def _handle_outbound_webhook_payload(
     payload: EvolutionWebhookPayload,
     db: AsyncSession,
+    settings: Settings,
 ) -> None:
-    if await _is_recent_bot_outbound_echo(db, payload):
+    if await _is_recent_bot_outbound_echo(db, payload, tenant_id=_tenant_id(settings)):
         logger.info("Ignoring outbound webhook already matched to bot reply for %s", payload.remote_jid)
         return
-    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
+    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name, tenant_id=_tenant_id(settings))
     manual_message = MANUAL_TEAM_INTERVENTION_MARKER
-    db.add(Interaccion(payload.remote_jid, MessageRole.assistant, manual_message))
+    db.add(Interaccion(payload.remote_jid, MessageRole.assistant, manual_message, tenant_id=_tenant_id(settings)))
     memory.push_name = payload.push_name or memory.push_name
     memory.resumen_perfil = _summarize_profile(
         memory.resumen_perfil,
@@ -531,11 +542,13 @@ async def _handle_outbound_webhook_payload(
 async def _is_recent_bot_outbound_echo(
     db: AsyncSession,
     payload: EvolutionWebhookPayload,
+    tenant_id: str = "vanity",
 ) -> bool:
     cutoff = datetime.now(UTC) - timedelta(seconds=RECENT_BOT_ECHO_WINDOW_SECONDS)
     result = await db.execute(
         select(Interaccion)
         .where(
+            Interaccion.tenant_id == tenant_id,
             Interaccion.whatsapp_id == payload.remote_jid,
             Interaccion.role == MessageRole.assistant,
             Interaccion.timestamp >= cutoff,
@@ -564,7 +577,7 @@ async def _handle_webhook_payload(
 ) -> None:
     logger.warning("Processing webhook message from %s", payload.remote_jid)
 
-    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name)
+    memory = await _get_or_create_memory(db, payload.remote_jid, payload.push_name, tenant_id=_tenant_id(settings))
     conversation_buffer = _get_conversation_buffer(payload.remote_jid)
     _update_conversation_buffer_from_user_message(conversation_buffer, payload.message, memory)
     pending_delete = _memory_delete_is_pending(memory)
@@ -573,7 +586,7 @@ async def _handle_webhook_payload(
     if _is_memory_delete_trigger(payload.message, settings):
         if not _is_authorized_admin(payload, settings):
             reply = "No puedo ejecutar ese comando administrativo desde este número."
-            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
             await db.commit()
             await _send_reply(payload, reply)
             logger.warning("Unauthorized memory delete trigger from %s", payload.remote_jid)
@@ -581,7 +594,7 @@ async def _handle_webhook_payload(
         reply = MEMORY_DELETE_CONFIRMATION_REPLY
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _mark_memory_delete_pending(memory.resumen_perfil)
-        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
         await db.commit()
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, reply)
@@ -591,7 +604,7 @@ async def _handle_webhook_payload(
     if pending_delete:
         if not _is_authorized_admin(payload, settings):
             reply = "No puedo confirmar ese comando administrativo desde este número."
-            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+            await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
             await db.commit()
             await _send_reply(payload, reply)
             logger.warning("Unauthorized memory delete confirmation from %s", payload.remote_jid)
@@ -605,7 +618,7 @@ async def _handle_webhook_payload(
     if pause_command is not None:
         if not _is_authorized_admin(payload, settings):
             reply = "No puedo ejecutar ese comando administrativo desde este número."
-            await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
+            await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply, tenant_id=_tenant_id(settings))
             _schedule_test_session_export(payload.remote_jid, settings)
             await _send_reply(payload, reply)
             logger.warning("Unauthorized pause command from %s", payload.remote_jid)
@@ -626,7 +639,7 @@ async def _handle_webhook_payload(
     if _is_sender_debug_command(payload.message):
         if not _is_authorized_admin(payload, settings):
             reply = "Ese comando de diagnóstico solo está disponible para administración."
-            await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
+            await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply, tenant_id=_tenant_id(settings))
             _schedule_test_session_export(payload.remote_jid, settings)
             await _send_reply(payload, reply)
             logger.warning("Unauthorized sender debug command from %s", payload.remote_jid)
@@ -636,7 +649,7 @@ async def _handle_webhook_payload(
 
     if needs_human_handover(payload.message):
         reply = human_handover_reply()
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         schedule_human_handover_notification(payload, app.state, settings=settings)
         await _send_reply(payload, reply)
@@ -648,7 +661,7 @@ async def _handle_webhook_payload(
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
             "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
         )
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, safe_reply)
         return
@@ -659,14 +672,20 @@ async def _handle_webhook_payload(
             "Soy Sofía de Vanity Nail Salon. Para cuidar tu atención, solo puedo ayudarte "
             "con servicios, precios y agendamiento. ¿Buscas uñas, pestañas o cejas?"
         )
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, safe_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, safe_reply)
         return
 
-    pending = await _get_pending_booking(db, payload.remote_jid)
-    completed = await _get_completed_booking(db, payload.remote_jid)
-    history = await _get_contextual_history(db, payload.remote_jid, pending, completed)
+    pending = await _get_pending_booking(db, payload.remote_jid, tenant_id=_tenant_id(settings))
+    completed = await _get_completed_booking(db, payload.remote_jid, tenant_id=_tenant_id(settings))
+    history = await _get_contextual_history(
+        db,
+        payload.remote_jid,
+        pending,
+        completed,
+        tenant_id=_tenant_id(settings),
+    )
     conversation_state = _derive_conversation_state(payload, history, memory, None, None, settings)
     conversation_buffer.conversation_state = conversation_state
     logger.info(
@@ -690,7 +709,7 @@ async def _handle_webhook_payload(
     )
     if _should_send_initial_greeting(history, memory, payload):
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "new", INITIAL_GREETING_REPLY)
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, INITIAL_GREETING_REPLY, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, INITIAL_GREETING_REPLY)
         logger.info("Reply sent: remote_jid=%s flow=initial_greeting", payload.remote_jid)
@@ -699,7 +718,7 @@ async def _handle_webhook_payload(
     name_only_reply = _name_only_followup_reply(payload.message, history)
     if name_only_reply:
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "collecting_service", name_only_reply)
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         await _send_reply(payload, name_only_reply)
         logger.info("Reply sent: remote_jid=%s flow=name_followup_without_llm", payload.remote_jid)
@@ -712,7 +731,7 @@ async def _handle_webhook_payload(
             _derive_conversation_state(payload, history, memory, pending, completed, settings),
             local_booking_reply.text,
         )
-        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, local_booking_reply.text)
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, local_booking_reply.text, tenant_id=_tenant_id(settings))
         _schedule_test_session_export(payload.remote_jid, settings)
         if local_booking_reply.schedules_followup:
             schedule_follow_up(
@@ -726,7 +745,7 @@ async def _handle_webhook_payload(
         logger.info("Reply sent: remote_jid=%s flow=local_booking_flow", payload.remote_jid)
         return
 
-    db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message))
+    db.add(Interaccion(payload.remote_jid, MessageRole.user, payload.message, tenant_id=_tenant_id(settings)))
     await _record_booking_checkpoint(db, payload, memory, history, settings)
     await db.commit()
 
@@ -734,10 +753,17 @@ async def _handle_webhook_payload(
     if structured_booking_reply:
         _update_conversation_buffer_from_assistant_reply(
             conversation_buffer,
-            _derive_conversation_state(payload, history, memory, await _get_pending_booking(db, payload.remote_jid), await _get_completed_booking(db, payload.remote_jid), settings),
+                _derive_conversation_state(
+                    payload,
+                    history,
+                    memory,
+                    await _get_pending_booking(db, payload.remote_jid, tenant_id=_tenant_id(settings)),
+                    await _get_completed_booking(db, payload.remote_jid, tenant_id=_tenant_id(settings)),
+                    settings,
+                ),
             structured_booking_reply,
         )
-        db.add(Interaccion(payload.remote_jid, MessageRole.assistant, structured_booking_reply))
+        db.add(Interaccion(payload.remote_jid, MessageRole.assistant, structured_booking_reply, tenant_id=_tenant_id(settings)))
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _summarize_profile(memory.resumen_perfil, payload.message, structured_booking_reply)
         memory.servicio_interes = _detect_service(payload.message) or memory.servicio_interes
@@ -752,7 +778,7 @@ async def _handle_webhook_payload(
     )
 
     _update_conversation_buffer_from_assistant_reply(conversation_buffer, conversation_state, response_text)
-    db.add(Interaccion(payload.remote_jid, MessageRole.assistant, response_text))
+    db.add(Interaccion(payload.remote_jid, MessageRole.assistant, response_text, tenant_id=_tenant_id(settings)))
     memory.push_name = payload.push_name or memory.push_name
     memory.resumen_perfil = _summarize_profile(memory.resumen_perfil, payload.message, response_text)
     memory.servicio_interes = _detect_service(payload.message) or memory.servicio_interes
@@ -942,10 +968,11 @@ def _should_schedule_booking_follow_up(
 async def _load_booking_follow_up_context(
     whatsapp_id: str,
 ) -> tuple[list[Interaccion], CitaPendiente | None, CitaCompletada | None]:
+    tenant_id = _tenant_id()
     async with AsyncSessionLocal() as db:
-        pending = await _get_pending_booking(db, whatsapp_id)
-        completed = await _get_completed_booking(db, whatsapp_id)
-        history = await _get_contextual_history(db, whatsapp_id, pending, completed, limit=5)
+        pending = await _get_pending_booking(db, whatsapp_id, tenant_id=tenant_id)
+        completed = await _get_completed_booking(db, whatsapp_id, tenant_id=tenant_id)
+        history = await _get_contextual_history(db, whatsapp_id, pending, completed, limit=5, tenant_id=tenant_id)
     return history, pending, completed
 
 
@@ -1609,8 +1636,14 @@ async def _get_or_create_memory(
     db: AsyncSession,
     whatsapp_id: str,
     push_name: str | None,
+    tenant_id: str = "vanity",
 ) -> SesionMemoria:
-    result = await db.execute(select(SesionMemoria).where(SesionMemoria.whatsapp_id == whatsapp_id))
+    result = await db.execute(
+        select(SesionMemoria).where(
+            SesionMemoria.tenant_id == tenant_id,
+            SesionMemoria.whatsapp_id == whatsapp_id,
+        )
+    )
     memory = result.scalar_one_or_none()
     if memory:
         try:
@@ -1628,7 +1661,7 @@ async def _get_or_create_memory(
                 memory.push_name = push_name
             return memory
 
-    memory = SesionMemoria(whatsapp_id=whatsapp_id, push_name=push_name)
+    memory = SesionMemoria(tenant_id=tenant_id, whatsapp_id=whatsapp_id, push_name=push_name)
     db.add(memory)
     await db.commit()
     await db.refresh(memory)
@@ -1645,17 +1678,23 @@ async def _get_contextual_history(
     pending: CitaPendiente | None,
     completed: CitaCompletada | None,
     limit: int = 10,
+    tenant_id: str = "vanity",
 ) -> list[Interaccion]:
     since = _conversation_context_cutoff(datetime.now(UTC), pending, completed)
-    return await _get_recent_history_since(db, whatsapp_id, limit=limit, since=since)
+    return await _get_recent_history_since(db, whatsapp_id, limit=limit, since=since, tenant_id=tenant_id)
 
 
-async def _get_full_history(db: AsyncSession, whatsapp_id: str) -> list[Interaccion]:
-    return await _get_recent_history_since(db, whatsapp_id, limit=500, since=None)
+async def _get_full_history(db: AsyncSession, whatsapp_id: str, tenant_id: str = "vanity") -> list[Interaccion]:
+    return await _get_recent_history_since(db, whatsapp_id, limit=500, since=None, tenant_id=tenant_id)
 
 
-async def _get_memory(db: AsyncSession, whatsapp_id: str) -> SesionMemoria | None:
-    result = await db.execute(select(SesionMemoria).where(SesionMemoria.whatsapp_id == whatsapp_id))
+async def _get_memory(db: AsyncSession, whatsapp_id: str, tenant_id: str = "vanity") -> SesionMemoria | None:
+    result = await db.execute(
+        select(SesionMemoria).where(
+            SesionMemoria.tenant_id == tenant_id,
+            SesionMemoria.whatsapp_id == whatsapp_id,
+        )
+    )
     return result.scalar_one_or_none()
 
 
@@ -1664,10 +1703,11 @@ async def _get_recent_history_since(
     whatsapp_id: str,
     limit: int = 10,
     since: datetime | None = None,
+    tenant_id: str = "vanity",
 ) -> list[Interaccion]:
     query = (
         select(Interaccion)
-        .where(Interaccion.whatsapp_id == whatsapp_id)
+        .where(Interaccion.tenant_id == tenant_id, Interaccion.whatsapp_id == whatsapp_id)
         .order_by(desc(Interaccion.timestamp))
         .limit(limit)
     )
@@ -1714,6 +1754,7 @@ def _build_test_session_export_payload(
         "mode": "test",
         "exported_at": datetime.now(UTC).isoformat(),
         "exported_at_local": _to_local_iso(datetime.now(UTC)),
+        "tenant_id": getattr(memory, "tenant_id", None) if memory is not None else None,
         "whatsapp_id": whatsapp_id,
         "phone_number": _digits_only(whatsapp_id),
         "push_name": memory.push_name if memory is not None else None,
@@ -1737,6 +1778,7 @@ def _serialize_pending_booking(pending: CitaPendiente | None) -> dict[str, Any] 
     if pending is None:
         return None
     return {
+        "tenant_id": getattr(pending, "tenant_id", None),
         "push_name": pending.push_name,
         "service_interest": pending.servicio_interes,
         "appointment_proof_message": pending.appointment_proof_message,
@@ -1754,6 +1796,7 @@ def _serialize_completed_booking(completed: CitaCompletada | None) -> dict[str, 
     if completed is None:
         return None
     return {
+        "tenant_id": getattr(completed, "tenant_id", None),
         "push_name": completed.push_name,
         "service_interest": completed.servicio_interes,
         "appointment_proof_message": completed.appointment_proof_message,
@@ -1877,9 +1920,10 @@ async def _add_interaction_pair(
     whatsapp_id: str,
     user_message: str,
     assistant_message: str,
+    tenant_id: str = "vanity",
 ) -> None:
-    db.add(Interaccion(whatsapp_id, MessageRole.user, user_message))
-    db.add(Interaccion(whatsapp_id, MessageRole.assistant, assistant_message))
+    db.add(Interaccion(whatsapp_id, MessageRole.user, user_message, tenant_id=tenant_id))
+    db.add(Interaccion(whatsapp_id, MessageRole.assistant, assistant_message, tenant_id=tenant_id))
 
 
 async def _record_booking_checkpoint(
@@ -1892,7 +1936,8 @@ async def _record_booking_checkpoint(
     if not payload.has_media:
         return
 
-    pending = await _get_pending_booking(db, payload.remote_jid)
+    tenant_id = getattr(memory, "tenant_id", "vanity")
+    pending = await _get_pending_booking(db, payload.remote_jid, tenant_id=tenant_id)
     if pending:
         return
 
@@ -1901,6 +1946,7 @@ async def _record_booking_checkpoint(
 
     proof_message = _booking_proof_message(payload)
     pending = CitaPendiente(
+        tenant_id=tenant_id,
         whatsapp_id=payload.remote_jid,
         push_name=payload.push_name or memory.push_name,
         appointment_proof_message=proof_message,
@@ -1910,15 +1956,20 @@ async def _record_booking_checkpoint(
     logger.info("Pending booking recorded for %s", payload.remote_jid)
 
 
-async def _get_pending_booking(db: AsyncSession, whatsapp_id: str) -> CitaPendiente | None:
-    result = await db.execute(select(CitaPendiente).where(CitaPendiente.whatsapp_id == whatsapp_id))
+async def _get_pending_booking(db: AsyncSession, whatsapp_id: str, tenant_id: str = "vanity") -> CitaPendiente | None:
+    result = await db.execute(
+        select(CitaPendiente).where(
+            CitaPendiente.tenant_id == tenant_id,
+            CitaPendiente.whatsapp_id == whatsapp_id,
+        )
+    )
     return result.scalar_one_or_none()
 
 
-async def _get_completed_booking(db: AsyncSession, whatsapp_id: str) -> CitaCompletada | None:
+async def _get_completed_booking(db: AsyncSession, whatsapp_id: str, tenant_id: str = "vanity") -> CitaCompletada | None:
     result = await db.execute(
         select(CitaCompletada)
-        .where(CitaCompletada.whatsapp_id == whatsapp_id)
+        .where(CitaCompletada.tenant_id == tenant_id, CitaCompletada.whatsapp_id == whatsapp_id)
         .order_by(desc(CitaCompletada.completed_at))
         .limit(1)
     )
@@ -1939,7 +1990,8 @@ async def _handle_structured_booking_flow(
     if not payload.has_media:
         return None
 
-    pending = await _get_pending_booking(db, payload.remote_jid)
+    tenant_id = getattr(memory, "tenant_id", "vanity")
+    pending = await _get_pending_booking(db, payload.remote_jid, tenant_id=tenant_id)
     has_structured_booking = bool((pending.booking_data or "").strip()) if pending else False
     if pending and has_structured_booking:
         payment = await _analyze_payment_proof(payload, settings)
@@ -1965,7 +2017,7 @@ async def _handle_structured_booking_flow(
     if not booking or not booking.booking_confirmed:
         return None
 
-    pending = pending or await _get_pending_booking(db, payload.remote_jid)
+    pending = pending or await _get_pending_booking(db, payload.remote_jid, tenant_id=tenant_id)
     if not pending:
         return None
     apply_booking_analysis_to_pending(
@@ -2047,17 +2099,18 @@ async def _persist_interaction(
     push_name: str | None,
     user_message: str,
     assistant_message: str,
+    tenant_id: str = "vanity",
 ) -> None:
-    await _get_or_create_memory(db, whatsapp_id, push_name)
-    await _add_interaction_pair(db, whatsapp_id, user_message, assistant_message)
+    await _get_or_create_memory(db, whatsapp_id, push_name, tenant_id=tenant_id)
+    await _add_interaction_pair(db, whatsapp_id, user_message, assistant_message, tenant_id=tenant_id)
     await db.commit()
 
 
-async def _purge_chat_records(db: AsyncSession, whatsapp_id: str) -> None:
-    await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == whatsapp_id))
-    await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == whatsapp_id))
-    await db.execute(delete(CitaPendiente).where(CitaPendiente.whatsapp_id == whatsapp_id))
-    await db.execute(delete(CitaCompletada).where(CitaCompletada.whatsapp_id == whatsapp_id))
+async def _purge_chat_records(db: AsyncSession, whatsapp_id: str, tenant_id: str = "vanity") -> None:
+    await db.execute(delete(Interaccion).where(Interaccion.tenant_id == tenant_id, Interaccion.whatsapp_id == whatsapp_id))
+    await db.execute(delete(SesionMemoria).where(SesionMemoria.tenant_id == tenant_id, SesionMemoria.whatsapp_id == whatsapp_id))
+    await db.execute(delete(CitaPendiente).where(CitaPendiente.tenant_id == tenant_id, CitaPendiente.whatsapp_id == whatsapp_id))
+    await db.execute(delete(CitaCompletada).where(CitaCompletada.tenant_id == tenant_id, CitaCompletada.whatsapp_id == whatsapp_id))
 
 
 def _is_memory_delete_trigger(message: str, settings: Settings) -> bool:
@@ -2169,11 +2222,9 @@ async def _handle_memory_delete_confirmation(
     memory: SesionMemoria,
     payload: EvolutionWebhookPayload,
 ) -> str:
+    tenant_id = getattr(memory, "tenant_id", "vanity")
     if _is_confirmation(payload.message):
-        await db.execute(delete(Interaccion).where(Interaccion.whatsapp_id == payload.remote_jid))
-        await db.execute(delete(SesionMemoria).where(SesionMemoria.whatsapp_id == payload.remote_jid))
-        await db.execute(delete(CitaPendiente).where(CitaPendiente.whatsapp_id == payload.remote_jid))
-        await db.execute(delete(CitaCompletada).where(CitaCompletada.whatsapp_id == payload.remote_jid))
+        await _purge_chat_records(db, payload.remote_jid, tenant_id=tenant_id)
         await db.commit()
         return "Listo, borré la memoria, historial y registros de citas de este chat."
 
@@ -2181,12 +2232,12 @@ async def _handle_memory_delete_confirmation(
         reply = "Perfecto, cancelo el borrado y conservo la memoria de Sofía."
         memory.push_name = payload.push_name or memory.push_name
         memory.resumen_perfil = _clear_memory_delete_pending(memory.resumen_perfil)
-        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=tenant_id)
         await db.commit()
         return reply
 
     reply = MEMORY_DELETE_CONFIRMATION_REPLY
-    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=tenant_id)
     await db.commit()
     return reply
 
@@ -2204,7 +2255,7 @@ async def _handle_pause_command(
     else:
         memory.resumen_perfil = _clear_bot_paused(memory.resumen_perfil)
         reply = "Bot reactivado para este chat. Sofía puede volver a responder."
-    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply)
+    await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=getattr(memory, "tenant_id", "vanity"))
     await db.commit()
     return reply
 

@@ -59,6 +59,7 @@ async def complete_pending_booking_with_payment(
     fallback_service_interest: str | None,
 ) -> tuple[CitaCompletada, BookingAnalysis | None]:
     completed = CitaCompletada(
+        tenant_id=pending.tenant_id,
         whatsapp_id=whatsapp_id,
         push_name=push_name or pending.push_name,
         appointment_proof_message=pending.appointment_proof_message,

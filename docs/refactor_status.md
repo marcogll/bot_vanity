@@ -35,6 +35,7 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 - Persistencia de pagos y finalización de citas extraída a `app/tools/payments.py`.
 - Modelos y mensajes de capturas/comprobantes extraídos a `app/tools/proofs.py`.
 - Adaptador OpenAI de análisis visual extraído a `app/tools/vision.py`.
+- `tenant_id` persistido en historial, memoria, citas y eventos webhook.
 - Renombre del generador principal a `generate_assistant_reply`; `_ask_vanessa` queda como wrapper temporal.
 - Follow-up de booking configurado a 15 minutos por defecto.
 - Notificación de escalación humana a `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS`.
@@ -42,7 +43,6 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Aún pendiente
 
-- Persistir `tenant_id` en modelos de base de datos.
 - Activar Runtime V2 fuera de shadow mode con allowlist.
 - Comparar formalmente respuesta V1 vs decisión/plan V2.
 - Eliminar wrapper `_ask_vanessa` cuando ya no haya dependencias internas.
@@ -54,14 +54,15 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 3. ✅ Mover persistencia de pagos/finalización de citas a `app/tools/payments.py`.
 4. ✅ Mover modelos/mensajes de capturas y pagos a `app/tools/proofs.py`.
 5. ✅ Mover prompts/adaptador OpenAI de análisis visual a `app/tools/vision.py`.
-6. ✅ Mantener wrappers en `main.py`.
-7. ✅ Correr suite completa y smoke test `/health`.
+6. ✅ Persistir `tenant_id` en modelos de base de datos y migración idempotente.
+7. ✅ Mantener wrappers en `main.py`.
+8. ✅ Correr suite completa y smoke test `/health`.
 
 ### Siguiente corte recomendado
 
 1. Mantener Runtime V2 en shadow mode mientras se comparan decisiones contra V1.
-2. Preparar `tenant_id` en modelos de base de datos.
-3. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
+2. Eliminar wrappers temporales de `main.py` cuando tests/imports ya apunten a módulos nuevos.
+3. Activar Runtime V2 fuera de shadow mode con allowlist.
 
 ## Flags relevantes
 
@@ -110,7 +111,7 @@ Si el usuario pide hablar con una persona o el mensaje contiene señales de quej
 La suite completa validada en este branch:
 
 ```text
-139 passed, 4 warnings
+142 passed, 4 warnings
 ```
 
 Comando:

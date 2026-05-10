@@ -38,6 +38,7 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
 - Panel admin `/admin` con siembra inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` cuando la tabla está vacía
+- Persistencia de `tenant_id` en historial, memoria, citas y eventos webhook
 - Runtime V2 en shadow mode para clasificar, decidir, planear respuesta y mezclar roles sin cambiar todavía la respuesta enviada
 - Flujo estructurado de booking antes del LLM para nombre, servicio, retiro, diseño/técnica, links de app y liga de booking
 - Escalación por WhatsApp a admins configurados cuando el usuario pide humano o hay queja
@@ -523,7 +524,7 @@ docker exec "$APP" python -c 'from app.config import get_settings; from openai i
 Suite actual:
 
 ```text
-139 passed
+142 passed
 ```
 
 Comando usado en esta rama:
