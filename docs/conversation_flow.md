@@ -151,13 +151,15 @@ Acción:
 
 - mandar links de app iOS/Android para quien no tenga Fresha
 - mandar liga oficial de booking
-- explicar qué debe buscar/agendar con un resumen breve
+- explicar qué debe buscar/agendar con nombres exactos de `service_catalog`
 - pedir captura de confirmación al terminar
 - nunca decir que Sofía verificó disponibilidad, encontró espacio o confirmó una cita
 
 Ejemplo:
 
-`Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso.`
+`Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - GELISH GLOW (gelish manos y pies).`
+
+Si la clienta pide promociones, combos o paquetes, Sofía debe listar solo opciones activas de `service_catalog`. No debe usar etiquetas genéricas como `Combo manos y pies` como si fueran servicios de Fresha.
 
 Después:
 

@@ -17,7 +17,8 @@ Usar webhook por instancia, no webhook global.
 Valores recomendados:
 
 - `enabled: true`
-- `url: https://<tu-dominio-o-ip>/webhook`
+- `url: http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET>` si Evolution y Sofía corren en la misma red Docker
+- `url: https://<dominio-vanessa-app>/webhook?apiKey=<WEBHOOK_SECRET>` si Evolution está fuera de la red Docker
 - `webhook_by_events: false`
 - `webhook_base64: true`
 - `events: ["MESSAGES_UPSERT"]`
@@ -43,13 +44,16 @@ Si más de un sistema responde, el problema ya no es solo latencia: se vuelve co
 
 ## Eventos recomendados
 
-Para este sprint:
+Para operación normal:
 
 - `MESSAGES_UPSERT`: sí
-- `CONNECTION_UPDATE`: opcional, solo para monitoreo
+- `CONNECTION_UPDATE`: opcional, solo para monitoreo fuera del webhook conversacional
 - `SEND_MESSAGE`: no necesario
 - `MESSAGES_UPDATE`: no necesario por ahora
 - `MESSAGES_DELETE`: no necesario por ahora
+- `CONTACTS_UPDATE`: no necesario
+- `PRESENCE_UPDATE`: no necesario
+- `CHATS_UPDATE`: no necesario
 
 ### Nota
 
@@ -73,7 +77,8 @@ Si corres todo en Docker, mantén Evolution y la app en la misma red interna.
 Recomendado:
 
 - Sofía responde a Evolution usando `http://evolution-api:8080`
-- el webhook público apunta a la app FastAPI
+- el webhook de Evolution apunta a `http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET>` cuando ambos contenedores comparten red
+- el webhook público apunta a la app FastAPI solo si Evolution está fuera de esa red
 - evita túneles innecesarios entre Evolution y la app si ambos están en la misma máquina o VPS
 
 ## Recomendaciones operativas para bajar latencia
@@ -94,7 +99,14 @@ Cada salto agrega retraso y puntos de falla.
 
 La URL de webhook debe apuntar directo a FastAPI:
 
-- `POST /webhook`
+- `POST /webhook?apiKey=<WEBHOOK_SECRET>`
+
+En logs sanos debes ver:
+
+- `delivery_lag_seconds=0` o bajo
+- `Webhook processing completed ... elapsed_seconds` normalmente cerca de 1 a 3 segundos
+
+Si `delivery_lag_seconds` llega alto, el retraso está antes de Sofía: Evolution, cola, proxy, dominio público o configuración persistida del webhook.
 
 ### 4. Revisa tiempos de respuesta de la app
 
@@ -122,7 +134,7 @@ Ejemplo de configuración:
 ```json
 {
   "enabled": true,
-  "url": "https://<tu-dominio>/webhook",
+  "url": "http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET>",
   "webhook_by_events": false,
   "webhook_base64": true,
   "events": [

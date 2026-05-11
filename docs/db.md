@@ -28,3 +28,12 @@ Tablas:
 - `citas_pendientes`: una cita abierta por WhatsApp con comprobante de cita recibido.
 - `citas_completadas`: registro permanente cuando ya se recibió comprobante de cita y comprobante de pago.
 - `webhook_events`: deduplicación y locks operativos por evento.
+- `service_catalog`: catálogo activo de Fresha. Es la fuente canónica para nombres de servicios, paquetes, promociones, extras, precios y duraciones.
+
+## Catálogo de servicios
+
+`service_catalog` se sincroniza desde el CSV de Fresha configurado en `FRESHA_SERVICE_CSV_PATH`.
+
+No hay catálogo de servicios en Markdown. Sofía debe usar registros activos de esta tabla para responder promociones, combos y resúmenes de booking. Si un servicio no aparece en la tabla, debe pedir aclaración o pasar el caso a recepción.
+
+Ver [service_catalog.md](service_catalog.md).

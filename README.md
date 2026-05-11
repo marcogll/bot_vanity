@@ -75,6 +75,7 @@ docs/
   system_prompt.md
   db.md
   evolution_api_latency_guide.md
+  service_catalog.md
 whatsapp_interactions/
   messaging_selfimp.md
 tests/
@@ -180,6 +181,8 @@ Columnas usadas del CSV:
 - `ID del servicio`: `external_service_id` para casar futuras importaciones.
 
 El prompt del LLM recibe el catálogo activo desde DB y tiene instrucción de usar únicamente esos nombres exactos. Si un servicio no está claro contra el catálogo, Sofía debe preguntar una aclaración o escalar a recepción, no inventar paquetes.
+
+La documentación operativa completa está en [docs/service_catalog.md](docs/service_catalog.md).
 
 Genera una llave Fernet válida:
 
@@ -295,7 +298,7 @@ Resumen corto:
 6. después de retiro:
    preguntar si tiene tono liso, diseño o técnica preferida
 7. ya con suficiente contexto:
-   preguntar si ya tiene app/cuenta Fresha; si no, mandar app links, y después mandar liga de booking con resumen tipo `vas a reservar: Retiro de Gel/Acrílico - Gelish - tono liso`
+   preguntar si ya tiene app/cuenta Fresha; si no, mandar app links, y después mandar liga de booking con nombres reales de `service_catalog`, por ejemplo `vas a reservar: Retiro de Gel/Acrílico - GELISH GLOW (gelish manos y pies)`
 8. 15 minutos después del booking:
    preguntar si pudo elegir horario, salvo que ya haya mandado captura/comprobante
 9. si llega captura/comprobante:
@@ -428,6 +431,8 @@ Notas:
 - `<WEBHOOK_SECRET_REAL>` es el valor literal de `WEBHOOK_SECRET`, sin `< >`
 - el dominio de `evolution-api` no va aquí
 - `WEBHOOK_SECRET` y el `apiKey` configurado en Evolution deben coincidir exactamente
+- si Evolution y `vanessa-app` corren en la misma red Docker, configura el webhook persistido de la instancia con `http://vanessa-app:8000/webhook?apiKey=<WEBHOOK_SECRET_REAL>` para evitar saltos por el dominio público
+- para conversaciones solo se necesita el evento `MESSAGES_UPSERT`; desactiva `contacts.update`, `messages.update`, `presence.update`, `chats.update` y otros eventos no conversacionales
 
 ## Pruebas CLI
 
@@ -451,7 +456,7 @@ Ejemplo real:
 
 ```bash
 curl -X POST "https://ed3tlhtejal71x0be1zgjkkr.soul23.cloud/message/sendText/sofia_prod" \
-  -H "apikey: qiY8h1TlRYxFoXzQ9rOoWd" \
+  -H "apikey: <EVOLUTION_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "number": "528441026472",
