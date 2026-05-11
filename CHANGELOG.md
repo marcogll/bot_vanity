@@ -26,6 +26,7 @@
 - Se agregó comando admin `dipirdu -rf`/`dipiridú -rf` con confirmación exacta para borrar toda la base.
 - Se bloqueó la lógica que podía inventar disponibilidad; Sofía ahora guía a Fresha y no pide día/hora ni confirma espacios.
 - Se optimizó el webhook para responder rápido a Evolution y evitar reintentos por 504 cuando la DB o el procesamiento tardan.
+- Se movió el parseo completo del webhook al background; el ACK ahora solo lee bytes, encola y responde.
 - Se renombró y consolidó el generador principal como `generate_assistant_reply`.
 - Se eliminaron wrappers temporales de `main.py` para helpers ya extraídos a tools.
 

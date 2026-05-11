@@ -193,49 +193,66 @@ async def health() -> dict[str, str]:
 @validate_webhook_api_key
 async def webhook(
     request: Request,
-    payload: EvolutionWebhookPayload,
     settings: Settings = Depends(get_settings),
 ) -> WebhookResponse:
-    if not _is_supported_message_event(payload, request.url.path):
-        logger.info("Ignored non-message event: event=%s path=%s", payload.event_name, request.url.path)
-        return WebhookResponse(message="ignored_event")
+    raw_body = await request.body()
+    _schedule_raw_webhook_processing(raw_body, request.url.path, settings)
+    logger.warning("Webhook ACK queued: path=%s bytes=%s", request.url.path, len(raw_body))
+    return WebhookResponse(message="accepted")
+
+
+def _schedule_raw_webhook_processing(raw_body: bytes, request_path: str, settings: Settings) -> None:
+    task = asyncio.create_task(_process_raw_webhook_payload(raw_body, request_path, settings))
+    app.state.webhook_tasks.add(task)
+    task.add_done_callback(app.state.webhook_tasks.discard)
+
+
+async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, settings: Settings) -> None:
+    try:
+        payload = EvolutionWebhookPayload.model_validate_json(raw_body)
+    except Exception:
+        logger.exception("Ignoring webhook with invalid payload: raw_body=%s", raw_body.decode("utf-8", errors="replace")[:4000])
+        return
+
+    if not _is_supported_message_event(payload, request_path):
+        logger.info("Ignored non-message event: event=%s path=%s", payload.event_name, request_path)
+        return
     if payload.from_me:
         if _is_test_mode_enabled(settings) and not _is_test_mode_allowed_number(payload.remote_jid, settings):
             logger.info("Ignoring outbound webhook outside allowlist during test mode for %s", payload.remote_jid)
-            return WebhookResponse(message="ignored_test_mode")
+            return
         if _consume_recent_outbound_signature(payload.remote_jid, payload.message):
             logger.warning("Ignoring self-sent outbound webhook for %s", payload.remote_jid)
-            return WebhookResponse(message="ignored")
+            return
         logger.warning("Logging manual outbound webhook for %s", payload.remote_jid)
         _schedule_outbound_logging(payload, settings)
-        return WebhookResponse(message="logged")
+        return
     if not payload.remote_jid or not payload.message.strip():
-        raw_body = (await request.body()).decode("utf-8", errors="replace")
         logger.warning(
             "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s normalized_payload=%s raw_body=%s",
             payload.remote_jid,
             payload.message_type,
             payload.has_media,
             payload.model_dump(),
-            raw_body[:4000],
+            raw_body.decode("utf-8", errors="replace")[:4000],
         )
-        return WebhookResponse(message="ignored")
+        return
     if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
         logger.info("Ignoring inbound webhook outside allowlist during test mode for %s", payload.remote_jid)
-        return WebhookResponse(message="ignored_test_mode")
+        return
     if rate_limiter is not None:
         try:
             rate_limiter.check(payload.remote_jid)
         except HTTPException:
             logger.warning("Rate limited webhook acknowledged without retry: remote_jid=%s", payload.remote_jid)
-            return WebhookResponse(message="rate_limited")
+            return
     if _remember_inbound_webhook_seen(payload):
         logger.warning(
             "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
             payload.remote_jid,
             payload.session_id,
         )
-        return WebhookResponse(message="duplicate")
+        return
 
     logger.warning(
         "Accepted webhook: remote_jid=%s sender=%s instance=%s message_type=%s has_media=%s",
@@ -246,7 +263,6 @@ async def webhook(
         payload.has_media,
     )
     _schedule_webhook_processing(payload, settings)
-    return WebhookResponse(message="accepted")
 
 
 def _schedule_webhook_processing(payload: EvolutionWebhookPayload, settings: Settings) -> None:
