@@ -162,9 +162,11 @@ def test_booking_flow_sends_booking_link_after_app_confirmation() -> None:
 
     assert reply is not None
     assert reply.schedules_followup
+    assert reply.followup_delay_seconds == 600
     assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
     assert "- Polygel Extensions: 90 min" in reply.text
     assert "Tiempo total estimado: 1 h 50 min" in reply.text
+    assert "captura con los detalles de la cita" in reply.text
     assert "https://booking.example" in reply.text
 
 
@@ -187,6 +189,72 @@ def test_booking_flow_sends_booking_link_after_registration_ready() -> None:
     assert "- Polygel Extensions: 90 min" in reply.text
     assert "Tiempo total estimado: 1 h 30 min" in reply.text
     assert "https://booking.example" in reply.text
+
+
+def test_booking_flow_maps_gel_hands_and_feet_to_gelish_glow_after_retiro() -> None:
+    history = [
+        {"role": "user", "content": "Pedicure"},
+        {
+            "role": "assistant",
+            "content": "Tenemos varias opciones de pedicure. ¿Te gustaría conocer más?",
+        },
+        {"role": "user", "content": "Quiero gel manos y pies"},
+        {
+            "role": "assistant",
+            "content": "Para el Gelish en manos y pies tenemos GELISH GLOW. ¿Necesitas retiro de algún producto anterior?",
+        },
+    ]
+
+    reply = booking_flow_reply("Si ocupo retiro", history, _settings())
+
+    assert reply is not None
+    assert "vas a reservar: Retiro de Gel/Acrílico - GELISH GLOW" in reply.text
+    assert "Acrílicas" not in reply.text
+    assert "ya tienes la app de Fresha" in reply.text
+
+
+def test_booking_flow_sends_gelish_glow_booking_items_without_acrylics() -> None:
+    history = [
+        {
+            "role": "assistant",
+            "content": "Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - GELISH GLOW.\n\nAntes de mandarte la liga para elegir horario, ¿ya tienes la app de Fresha y tu cuenta registrada?",
+        },
+    ]
+
+    reply = booking_flow_reply("Ya la tengo", history, _settings())
+
+    assert reply is not None
+    assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
+    assert "- GELISH GLOW (Gelish Manos + Gelish Pies): 95 min" in reply.text
+    assert "- Acrílicas" not in reply.text
+    assert "Tiempo total estimado: 1 h 55 min" in reply.text
+
+
+def test_booking_flow_updates_booking_list_when_client_adds_pedicure() -> None:
+    history = [
+        {
+            "role": "assistant",
+            "content": (
+                "Perfecto 💗 En Fresha busca estos servicios:\n"
+                "- Retiro de Gel/Acrílico: 20 min\n"
+                "- GELISH GLOW (Gelish Manos + Gelish Pies): 95 min\n\n"
+                "Tiempo total estimado: 1 h 55 min.\n\n"
+                "Liga de booking: https://booking.example\n\n"
+                "Cuando termines, mándame captura con los detalles de la cita para registrarla y avisarle al staff."
+            ),
+        },
+    ]
+
+    reply = booking_flow_reply("Y si quiero agregar pedicure", history, _settings())
+
+    assert reply is not None
+    assert reply.schedules_followup
+    assert reply.followup_delay_seconds == 600
+    assert "agregué el servicio" in reply.text
+    assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
+    assert "- GELISH GLOW (Gelish Manos + Gelish Pies): 95 min" in reply.text
+    assert "- Pedicure Vanity CLASSIC: 80 min" in reply.text
+    assert "Tiempo total estimado: 3 h 15 min" in reply.text
 
 
 def test_booking_flow_asks_app_after_retiro_material_previo_phrase() -> None:

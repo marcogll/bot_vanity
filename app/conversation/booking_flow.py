@@ -43,6 +43,8 @@ def detect_service(message: str) -> str | None:
 
 def detect_nail_subservice(message: str) -> str | None:
     normalized = normalize_text_for_matching(message)
+    if _is_gelish_hands_and_feet(normalized):
+        return "GELISH GLOW"
     if "combo" in normalized or ("manicure" in normalized and "pedicure" in normalized):
         return "Combo manos y pies"
     if "pedicure" in normalized or "pedi" in normalized:
@@ -85,7 +87,7 @@ def booking_flow_reply(
         has_app = detect_app_registration_answer(message)
         if has_app is True:
             summary = _latest_booking_summary(history) or build_booking_summary("", history)
-            return BookingFlowReply(_booking_link_reply(summary, settings), schedules_followup=True)
+            return _booking_link_flow_reply(summary, settings)
         if has_app is False:
             return BookingFlowReply(
                 _app_registration_reply(settings),
@@ -97,7 +99,12 @@ def booking_flow_reply(
 
     if last_assistant_sent_app_registration_links(history) and detect_app_ready_answer(message):
         summary = _latest_booking_summary(history) or build_booking_summary("", history)
-        return BookingFlowReply(_booking_link_reply(summary, settings), schedules_followup=True)
+        return _booking_link_flow_reply(summary, settings)
+
+    if last_assistant_sent_booking_link(history) and _message_requests_service_addition(message):
+        current_summary = _latest_booking_link_summary(history) or _latest_booking_summary(history) or build_booking_summary("", history)
+        summary = _merge_booking_summary(current_summary, message)
+        return _booking_link_flow_reply(summary, settings, intro="Claro 💗 agregué el servicio a tu lista. En Fresha busca:")
 
     if last_assistant_sent_booking_link_without_app_check(history):
         has_app = detect_app_registration_answer(message)
@@ -110,7 +117,7 @@ def booking_flow_reply(
             )
         if has_app is True:
             summary = _latest_booking_summary(history) or build_booking_summary("", history)
-            return BookingFlowReply(_booking_link_reply(summary, settings), schedules_followup=True)
+            return _booking_link_flow_reply(summary, settings)
 
     if last_assistant_requested_retiro(history):
         retiro = detect_retiro_answer(message)
@@ -291,42 +298,73 @@ def _app_registration_reply(settings: BookingFlowSettings) -> str:
 
 
 def _booking_link_reply(summary: str, settings: BookingFlowSettings) -> str:
+    return _booking_link_reply_with_intro(summary, settings, "Perfecto 💗 En Fresha busca estos servicios:")
+
+
+def _booking_link_flow_reply(
+    summary: str,
+    settings: BookingFlowSettings,
+    *,
+    intro: str = "Perfecto 💗 En Fresha busca estos servicios:",
+) -> BookingFlowReply:
+    return BookingFlowReply(
+        _booking_link_reply_with_intro(summary, settings, intro),
+        schedules_followup=True,
+        followup_delay_seconds=600,
+        followup_message=(
+            "¿Todo bien con tu cita? Si ya quedó, mándame captura con los detalles "
+            "para registrarla y avisarle al staff 💗"
+        ),
+    )
+
+
+def _booking_link_reply_with_intro(summary: str, settings: BookingFlowSettings, intro: str) -> str:
     items = _booking_items(summary)
     services = "\n".join(f"- {item.name}: {item.minutes} min" for item in items)
     total_minutes = sum(item.minutes for item in items)
     return (
-        "Perfecto 💗 En Fresha busca estos servicios:\n"
+        f"{intro}\n"
         f"{services}\n\n"
         f"Tiempo total estimado: {_format_total_minutes(total_minutes)}.\n\n"
         f"Liga de booking: {settings.booking_url}\n\n"
-        "Cuando termines, mándame captura de la confirmación para revisar tu cita."
+        "Cuando termines, mándame captura con los detalles de la cita para registrarla y avisarle al staff."
     )
 
 
 def _booking_items(summary: str) -> list[BookingItem]:
     items: list[BookingItem] = []
-    normalized = normalize_text_for_matching(summary)
-    if "retiro" in normalized:
-        items.append(BookingItem("Retiro de Gel/Acrílico", 20))
-    if "polygel" in normalized:
-        items.append(BookingItem("Polygel Extensions", 90))
-    elif "soft gel" in normalized:
-        items.append(BookingItem("Soft Gel", 90))
-    elif "acrilic" in normalized or "acrilicas" in normalized:
-        items.append(BookingItem("Acrílicas", 90))
-    elif "gelish" in normalized:
-        items.append(BookingItem("Gelish", 60))
-    elif "pedicure" in normalized:
-        items.append(BookingItem("Pedicure", 60))
-    elif "manicure" in normalized:
-        items.append(BookingItem("Manicure", 45))
+    normalized_summary = normalize_text_for_matching(summary)
+    for part in _summary_parts(summary):
+        normalized = normalize_text_for_matching(part)
+        if "retiro" in normalized:
+            _append_unique_booking_item(items, BookingItem("Retiro de Gel/Acrílico", 20))
+            continue
+        if "gelish glow" in normalized or _is_gelish_hands_and_feet(normalized):
+            _append_unique_booking_item(items, BookingItem("GELISH GLOW (Gelish Manos + Gelish Pies)", 95))
+        elif "polygel" in normalized:
+            _append_unique_booking_item(items, BookingItem("Polygel Extensions", 90))
+        elif "soft gel" in normalized:
+            _append_unique_booking_item(items, BookingItem("Soft Gel", 90))
+        elif "acrilic" in normalized or "acrilicas" in normalized:
+            _append_unique_booking_item(items, BookingItem("Acrílicas", 90))
+        elif "gelish" in normalized:
+            _append_unique_booking_item(items, BookingItem("Gelish", 60))
+        elif "pedicure" in normalized:
+            _append_unique_booking_item(items, BookingItem("Pedicure Vanity CLASSIC", 80))
+        elif "manicure" in normalized:
+            _append_unique_booking_item(items, BookingItem("Manicure", 45))
 
-    if "frances" in normalized or "french" in normalized:
+    if "frances" in normalized_summary or "french" in normalized_summary:
         items.append(BookingItem("Diseño French", 20))
-    elif "nail art" in normalized or "diseno" in normalized:
+    elif "nail art" in normalized_summary or "diseno" in normalized_summary:
         items.append(BookingItem("Diseño/Nail Art", 20))
 
     return items or [BookingItem(summary or "Servicio", 60)]
+
+
+def _append_unique_booking_item(items: list[BookingItem], item: BookingItem) -> None:
+    if all(existing.name != item.name for existing in items):
+        items.append(item)
 
 
 def _format_total_minutes(minutes: int) -> str:
@@ -374,6 +412,18 @@ def last_assistant_sent_booking_link_without_app_check(history: list[dict[str, s
     )
 
 
+def last_assistant_sent_booking_link(history: list[dict[str, str]]) -> bool:
+    last = _last_assistant_message(history)
+    if not last:
+        return False
+    normalized = normalize_text_for_matching(last)
+    return (
+        ("liga de booking" in normalized or "booking" in normalized)
+        and ("http://" in last or "https://" in last)
+        and "fresha" in normalized
+    )
+
+
 def last_assistant_offered_booking(history: list[dict[str, str]]) -> bool:
     last = _last_assistant_message(history)
     if not last:
@@ -397,6 +447,52 @@ def _latest_booking_summary(history: list[dict[str, str]]) -> str | None:
     return None
 
 
+def _latest_booking_link_summary(history: list[dict[str, str]]) -> str | None:
+    for item in reversed(history):
+        if item.get("role") != "assistant":
+            continue
+        content = item.get("content") or ""
+        if "Liga de booking" not in content and "liga de booking" not in normalize_text_for_matching(content):
+            continue
+        parts: list[str] = []
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("- "):
+                continue
+            service_name = stripped[2:].split(":", 1)[0].strip()
+            summary_part = _summary_part_from_booking_item_name(service_name)
+            if summary_part and summary_part not in parts:
+                parts.append(summary_part)
+        if parts:
+            return " - ".join(parts)
+    return None
+
+
+def _summary_part_from_booking_item_name(service_name: str) -> str | None:
+    normalized = normalize_text_for_matching(service_name)
+    if "retiro" in normalized:
+        return "Retiro de Gel/Acrílico"
+    if "gelish glow" in normalized:
+        return "GELISH GLOW"
+    if "polygel" in normalized:
+        return "Polygel"
+    if "soft gel" in normalized:
+        return "Soft Gel"
+    if "acrilic" in normalized or "acrilicas" in normalized:
+        return "Acrílicas"
+    if "pedicure" in normalized:
+        return "Pedicure Vanity CLASSIC"
+    if "manicure" in normalized:
+        return "Manicure"
+    if "gelish" in normalized:
+        return "Gelish"
+    if "french" in normalized or "frances" in normalized:
+        return "francés"
+    if "diseno" in normalized or "nail art" in normalized:
+        return "diseño"
+    return None
+
+
 def _latest_detected_nail_subservice(messages: list[str]) -> str | None:
     for message in reversed(messages):
         subservice = detect_nail_subservice(message)
@@ -411,6 +507,53 @@ def _latest_retiro_answer(messages: list[str]) -> bool | None:
         if answer is not None:
             return answer
     return None
+
+
+def _summary_parts(summary: str) -> list[str]:
+    parts = [part.strip(" .") for part in re.split(r"\s+-\s+", summary) if part.strip(" .")]
+    return parts or [summary]
+
+
+def _merge_booking_summary(summary: str, message: str) -> str:
+    parts = _summary_parts(summary)
+    subservice = detect_nail_subservice(message)
+    design = _clean_design_preference(message)
+    if subservice and subservice not in parts:
+        parts.append(subservice)
+    if design and design not in parts:
+        parts.append(design)
+    return " - ".join(parts)
+
+
+def _message_requests_service_addition(message: str) -> bool:
+    normalized = normalize_text_for_matching(message)
+    if not detect_nail_subservice(message) and not _clean_design_preference(message):
+        return False
+    addition_markers = (
+        "agregar",
+        "agregue",
+        "anadir",
+        "añadir",
+        "sumar",
+        "incluir",
+        "tambien",
+        "también",
+        "ademas",
+        "además",
+        "y si quiero",
+    )
+    return any(marker in normalized for marker in addition_markers)
+
+
+def _is_gelish_hands_and_feet(normalized: str) -> bool:
+    return (
+        ("gel manos y pies" in normalized or "gelish manos y pies" in normalized)
+        or (
+            ("gel" in normalized or "gelish" in normalized)
+            and "manos" in normalized
+            and "pies" in normalized
+        )
+    )
 
 
 def _clean_design_preference(message: str) -> str | None:
