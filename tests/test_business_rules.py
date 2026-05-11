@@ -1,3 +1,5 @@
+from collections import OrderedDict
+
 from app.business_rules import needs_human_handover
 from app.knowledge_engine import KnowledgeEngine
 from app.main import (
@@ -17,6 +19,7 @@ from app.main import (
     _has_extended_booking_context,
     _has_recent_manual_team_intervention,
     _remember_recent_outbound_signature,
+    _remember_inbound_webhook_seen,
     _consume_recent_outbound_signature,
     _handle_structured_booking_flow,
     _handle_memory_delete_confirmation,
@@ -781,6 +784,28 @@ def test_webhook_dedupe_key_uses_instance_chat_and_message_id() -> None:
     )
 
     assert _webhook_dedupe_key(payload) == "sofia:5218441026472@s.whatsapp.net:ABC123"
+
+
+def test_inbound_webhook_fast_dedupe_uses_memory_before_database() -> None:
+    from app.main import app
+
+    app.state.processed_webhook_ids = OrderedDict()
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {
+                    "remoteJid": "5218441026472@s.whatsapp.net",
+                    "fromMe": False,
+                    "id": "FAST123",
+                },
+                "message": {"conversation": "Hola"},
+            },
+        }
+    )
+
+    assert not _remember_inbound_webhook_seen(payload)
+    assert _remember_inbound_webhook_seen(payload)
 
 
 def test_initial_greeting_is_used_only_without_recent_history() -> None:

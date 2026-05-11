@@ -223,14 +223,13 @@ async def webhook(
     if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
         logger.info("Ignoring inbound webhook outside allowlist during test mode for %s", payload.remote_jid)
         return WebhookResponse(message="ignored_test_mode")
-    if await _is_rate_limited(payload.remote_jid, settings):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Rate limit exceeded",
-        )
     if rate_limiter is not None:
-        rate_limiter.check(payload.remote_jid)
-    if await _is_duplicate_webhook(payload, settings):
+        try:
+            rate_limiter.check(payload.remote_jid)
+        except HTTPException:
+            logger.warning("Rate limited webhook acknowledged without retry: remote_jid=%s", payload.remote_jid)
+            return WebhookResponse(message="rate_limited")
+    if _remember_inbound_webhook_seen(payload):
         logger.warning(
             "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
             payload.remote_jid,
@@ -263,6 +262,10 @@ def _schedule_outbound_logging(payload: EvolutionWebhookPayload, settings: Setti
 
 
 async def _is_duplicate_webhook(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
+    return not await _claim_webhook_for_processing(payload, settings)
+
+
+def _remember_inbound_webhook_seen(payload: EvolutionWebhookPayload) -> bool:
     dedupe_key = _webhook_dedupe_key(payload)
     if not dedupe_key:
         return False
@@ -270,6 +273,16 @@ async def _is_duplicate_webhook(payload: EvolutionWebhookPayload, settings: Sett
     app.state.processed_webhook_ids = processed
     if dedupe_key in processed:
         processed.move_to_end(dedupe_key)
+        return True
+    processed[dedupe_key] = None
+    while len(processed) > MAX_PROCESSED_WEBHOOK_IDS:
+        processed.popitem(last=False)
+    return False
+
+
+async def _claim_webhook_for_processing(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
+    dedupe_key = _webhook_dedupe_key(payload)
+    if not dedupe_key:
         return True
     async with AsyncSessionLocal() as db:
         event = WebhookEvent(
@@ -284,11 +297,8 @@ async def _is_duplicate_webhook(payload: EvolutionWebhookPayload, settings: Sett
             await db.commit()
         except IntegrityError:
             await db.rollback()
-            return True
-    processed[dedupe_key] = None
-    while len(processed) > MAX_PROCESSED_WEBHOOK_IDS:
-        processed.popitem(last=False)
-    return False
+            return False
+    return True
 
 
 def _webhook_dedupe_key(payload: EvolutionWebhookPayload) -> str | None:
@@ -515,6 +525,16 @@ async def _post_test_session_export(
 
 
 async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: Settings) -> None:
+    if not await _claim_webhook_for_processing(payload, settings):
+        logger.warning(
+            "Skipping duplicate persisted webhook: remote_jid=%s session_id=%s",
+            payload.remote_jid,
+            payload.session_id,
+        )
+        return
+    if await _is_rate_limited(payload.remote_jid, settings):
+        logger.warning("Skipping rate-limited webhook in background: remote_jid=%s", payload.remote_jid)
+        return
     async with AsyncSessionLocal() as db:
         try:
             await _handle_webhook_payload(payload, db, settings)

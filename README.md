@@ -271,6 +271,8 @@ Escenarios que deben sentirse naturales:
 
 Sofía no consulta disponibilidad ni confirma espacios desde WhatsApp. Si la clienta da día/hora, se le guía a Fresha para ver disponibilidad real y elegir horario.
 
+El endpoint de webhook responde rápido a Evolution y procesa la conversación en background. Esto evita reintentos por `504` cuando una respuesta tarda por OpenAI, DB o envío de WhatsApp.
+
 ## Contexto y memoria
 
 La memoria ya no se usa abierta indefinidamente.
