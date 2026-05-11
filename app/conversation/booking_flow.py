@@ -99,6 +99,19 @@ def booking_flow_reply(
         summary = _latest_booking_summary(history) or build_booking_summary("", history)
         return BookingFlowReply(_booking_link_reply(summary, settings), schedules_followup=True)
 
+    if last_assistant_sent_booking_link_without_app_check(history):
+        has_app = detect_app_registration_answer(message)
+        if has_app is False:
+            return BookingFlowReply(
+                _app_registration_reply(settings),
+                schedules_followup=True,
+                followup_delay_seconds=300,
+                followup_message="¿Pudiste registrarte en Fresha? Cuando tengas la app lista te paso la liga para que elijas tu horario 💗",
+            )
+        if has_app is True:
+            summary = _latest_booking_summary(history) or build_booking_summary("", history)
+            return BookingFlowReply(_booking_link_reply(summary, settings), schedules_followup=True)
+
     if last_assistant_requested_retiro(history):
         retiro = detect_retiro_answer(message)
         if retiro is None:
@@ -133,7 +146,13 @@ def last_assistant_requested_retiro(history: list[dict[str, str]]) -> bool:
         return False
     normalized = normalize_text_for_matching(last)
     return (
-        ("requiere retiro" in normalized or "requieres retiro" in normalized or "necesitas retiro" in normalized)
+        (
+            "requiere retiro" in normalized
+            or "requieres retiro" in normalized
+            or "necesitas retiro" in normalized
+            or "necesitas retirar" in normalized
+            or "necesita retirar" in normalized
+        )
         and ("producto" in normalized or "material" in normalized)
     )
 
@@ -340,6 +359,19 @@ def last_assistant_sent_app_registration_links(history: list[dict[str, str]]) ->
         return False
     normalized = normalize_text_for_matching(last)
     return "descarga fresha" in normalized and "ya la tengo" in normalized
+
+
+def last_assistant_sent_booking_link_without_app_check(history: list[dict[str, str]]) -> bool:
+    last = _last_assistant_message(history)
+    if not last:
+        return False
+    normalized = normalize_text_for_matching(last)
+    return (
+        "fresha" in normalized
+        and ("http://" in last or "https://" in last)
+        and "ya tienes la app" not in normalized
+        and "descarga fresha" not in normalized
+    )
 
 
 def last_assistant_offered_booking(history: list[dict[str, str]]) -> bool:

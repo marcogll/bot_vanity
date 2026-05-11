@@ -19,6 +19,8 @@ from app.main import (
     _has_extended_booking_context,
     _has_recent_manual_team_intervention,
     _remember_recent_outbound_signature,
+    _remember_recent_database_delete_confirmation,
+    _recent_database_delete_confirmation_seen,
     _remember_inbound_webhook_seen,
     _consume_recent_outbound_signature,
     _handle_structured_booking_flow,
@@ -1022,6 +1024,16 @@ def test_recent_outbound_signature_can_be_consumed_once() -> None:
 
     assert _consume_recent_outbound_signature("5218446686100@s.whatsapp.net", "Hola hermosa")
     assert not _consume_recent_outbound_signature("5218446686100@s.whatsapp.net", "Hola hermosa")
+
+
+def test_recent_database_delete_confirmation_marker_is_seen() -> None:
+    from app.main import app
+
+    app.state.recent_database_delete_confirmations = OrderedDict()
+
+    _remember_recent_database_delete_confirmation("5218446686100@s.whatsapp.net")
+
+    assert _recent_database_delete_confirmation_seen("5218446686100@s.whatsapp.net")
 
 
 def test_detects_recent_manual_team_intervention() -> None:

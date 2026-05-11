@@ -121,6 +121,7 @@ MAX_RECENT_OUTBOUND_SIGNATURES = 500
 MAX_CONVERSATION_BUFFERS = 1000
 MANUAL_TEAM_INTERVENTION_MARKER = "[Intervención manual del equipo registrada]"
 RECENT_BOT_ECHO_WINDOW_SECONDS = 300
+RECENT_DATABASE_DELETE_CONFIRMATION_SECONDS = 120
 DEFAULT_CONVERSATION_CONTEXT_HOURS = 24
 BOOKING_CONVERSATION_CONTEXT_HOURS = 48
 LOCAL_TIMEZONE = ZoneInfo("America/Monterrey")
@@ -151,6 +152,7 @@ async def startup() -> None:
     app.state.test_session_tasks = set()
     app.state.processed_webhook_ids = OrderedDict()
     app.state.recent_outbound_signatures = OrderedDict()
+    app.state.recent_database_delete_confirmations = OrderedDict()
     app.state.conversation_buffers = OrderedDict()
     app.state.admin_runtime = {
         "bot_paused": False,
@@ -690,6 +692,14 @@ async def _handle_webhook_payload(
     pending_database_delete = _database_delete_is_pending(memory)
     pending_delete = _memory_delete_is_pending(memory)
     pause_command = _pause_command_action(payload.message)
+
+    if _is_database_delete_confirmation(payload.message) and _recent_database_delete_confirmation_seen(payload.remote_jid):
+        reply = "Listo, la base de datos de Sofía ya quedó borrada."
+        await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=_tenant_id(settings))
+        await db.commit()
+        await _send_reply(payload, reply)
+        logger.warning("Duplicate database delete confirmation acknowledged for %s", payload.remote_jid)
+        return
 
     if _is_database_delete_trigger(payload.message, settings):
         if not _is_authorized_admin(payload, settings):
@@ -1791,6 +1801,27 @@ def _consume_recent_outbound_signature(whatsapp_id: str, message: str) -> bool:
     return True
 
 
+def _remember_recent_database_delete_confirmation(whatsapp_id: str) -> None:
+    confirmations: OrderedDict[str, datetime] = getattr(app.state, "recent_database_delete_confirmations", OrderedDict())
+    app.state.recent_database_delete_confirmations = confirmations
+    confirmations[whatsapp_id] = datetime.now(UTC)
+    _prune_recent_database_delete_confirmations(confirmations)
+
+
+def _recent_database_delete_confirmation_seen(whatsapp_id: str) -> bool:
+    confirmations: OrderedDict[str, datetime] = getattr(app.state, "recent_database_delete_confirmations", OrderedDict())
+    app.state.recent_database_delete_confirmations = confirmations
+    _prune_recent_database_delete_confirmations(confirmations)
+    return whatsapp_id in confirmations
+
+
+def _prune_recent_database_delete_confirmations(confirmations: OrderedDict[str, datetime]) -> None:
+    cutoff = datetime.now(UTC) - timedelta(seconds=RECENT_DATABASE_DELETE_CONFIRMATION_SECONDS)
+    for key, created_at in list(confirmations.items()):
+        if created_at < cutoff:
+            del confirmations[key]
+
+
 def _markdown_link_to_plain_text(match: re.Match[str]) -> str:
     label = match.group(1).strip()
     url = match.group(2).strip()
@@ -2457,6 +2488,7 @@ async def _handle_database_delete_confirmation(
     if _is_database_delete_confirmation(payload.message):
         await _purge_database_records(db)
         await db.commit()
+        _remember_recent_database_delete_confirmation(payload.remote_jid)
         return "Listo, borré toda la base de datos de Sofía."
 
     if _is_cancellation(payload.message):

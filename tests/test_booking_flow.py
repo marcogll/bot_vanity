@@ -206,6 +206,42 @@ def test_booking_flow_asks_app_after_retiro_material_previo_phrase() -> None:
     assert "https://booking.example" not in reply.text
 
 
+def test_booking_flow_recognizes_retirar_producto_phrase() -> None:
+    history = [
+        {"role": "user", "content": "Polygel"},
+        {
+            "role": "assistant",
+            "content": "¡Perfecto, Marco! Para las extensiones de uñas con Polygel, ¿necesitas retirar algún producto que tengas actualmente en tus uñas?",
+        },
+    ]
+
+    reply = booking_flow_reply("Si necesito retiro", history, _settings())
+
+    assert reply is not None
+    assert "vas a reservar: Retiro de Gel/Acrílico - Polygel" in reply.text
+    assert "ya tienes la app de Fresha" in reply.text
+    assert "https://booking.example" not in reply.text
+
+
+def test_booking_flow_sends_app_links_after_direct_booking_link_when_client_has_no_app() -> None:
+    history = [
+        {"role": "user", "content": "Polygel"},
+        {"role": "user", "content": "Si necesito retiro"},
+        {
+            "role": "assistant",
+            "content": "Puedes elegir el horario en Fresha: https://booking.example",
+        },
+    ]
+
+    reply = booking_flow_reply("No tengo la app", history, _settings())
+
+    assert reply is not None
+    assert reply.schedules_followup
+    assert "https://apps.apple.com/fresha" in reply.text
+    assert "https://play.google.com/fresha" in reply.text
+    assert "https://booking.example" not in reply.text
+
+
 def test_detect_retiro_answer_distinguishes_yes_no() -> None:
     assert detect_retiro_answer("no, nada") is False
     assert detect_retiro_answer("sí, tengo gel") is True
