@@ -41,12 +41,12 @@ Este archivo contiene la base de conocimientos oficial para Sofía. Los precios 
 ## 🏗️ EXTENSIONES DE UÑAS
 *Para servicios de extensiones, es obligatorio preguntar por el tamaño deseado y si requiere retiro de material previo.*
 
-### Acrílicas (Set Nuevo):
+### Uñas de acrílico (Set Nuevo):
 - **Acrylic Extensions - Tamaño #1 y #2** | $550 | 85 min.
 - **Acrylic Extensions - Tamaño #3 y #4** | $600 | 105 min.
 - **Acrylic Extensions - Tamaño #5 y #6** | $650 | 120 min.
 - **Acrylic Extensions - Tamaño #7 y #8** | $800 | 180 min.
-  *Descripción:* Transforma tus uñas con nuestras extensiones acrílicas. Esta técnica te permite personalizar la forma y el largo de tus uñas, resultando en una superficie sólida y duradera. Elige un elegante color liso de nuestra amplia variedad de Gelish.
+  *Descripción:* Transforma tus uñas con nuestras extensiones de acrílico. Esta técnica te permite personalizar la forma y el largo de tus uñas, resultando en una superficie sólida y duradera. Elige un elegante color liso de nuestra amplia variedad de Gelish.
 
 ### Soft Gel (Press-on):
 - **Soft Gel Extensions - Tamaño #1 y #2** | $500 | 85 min.

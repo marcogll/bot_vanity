@@ -72,7 +72,7 @@ def test_policy_engine_blocks_prompt_injection_with_structured_reply() -> None:
 
 def test_policy_engine_plans_missing_detail_without_booking_link() -> None:
     engine = PolicyEngine()
-    context = _context("Quiero acrílicas", missing_fields={"retiro"})
+    context = _context("Quiero uñas de acrílico", missing_fields={"retiro"})
     decision = engine.decide(context)
     plan = engine.plan_response(context, decision)
 

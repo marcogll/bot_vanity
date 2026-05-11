@@ -38,6 +38,7 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
 - Panel admin `/admin` con siembra inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` cuando la tabla está vacía
+- Sincronización de `service_catalog` desde export CSV local de Fresha para evitar servicios o paquetes inventados
 - Persistencia de `tenant_id` en historial, memoria, citas y eventos webhook
 - Runtime V2 en shadow mode para clasificar, decidir, planear respuesta y mezclar roles sin cambiar todavía la respuesta enviada
 - Comparación auditada V1/V2 en logs cuando Runtime V2 corre en shadow mode
@@ -114,6 +115,7 @@ Variables críticas:
 - `EVOLUTION_INSTANCE_NAME`
 - `BOOKING_URL`
 - `PAYMENT_URL`
+- `FRESHA_SERVICE_CSV_PATH`
 - `IOS_APP_STORE_URL`
 - `ANDROID_PLAY_STORE_URL`
 
@@ -124,6 +126,7 @@ Variables del panel admin:
 - `ADMIN_PHONE_NUMBERS=528441026472,528445047771`
 - `ADMIN_BOOTSTRAP_USERNAME=admin`
 - `ADMIN_BOOTSTRAP_PASSWORD=<password fuerte temporal>`
+- `ADMIN_BOOTSTRAP_RESET_EXISTING=false`
 - `ADMIN_SESSION_SECRET=<secreto largo aleatorio>`
 - `ADMIN_SESSION_MINUTES=120`
 - `ADMIN_LOGIN_MAX_ATTEMPTS=5`
@@ -131,12 +134,54 @@ Variables del panel admin:
 
 Notas:
 
-- `ADMIN_BOOTSTRAP_PASSWORD` solo se usa para sembrar el primer admin si no existe.
+- `ADMIN_BOOTSTRAP_PASSWORD` se usa para sembrar el primer admin si no existe.
+- `ADMIN_BOOTSTRAP_RESET_EXISTING=true` permite resetear el password del usuario `ADMIN_BOOTSTRAP_USERNAME` al iniciar. Úsalo solo como recuperación temporal y vuelve a dejarlo en `false` después de entrar.
 - `ADMIN_PHONE_NUMBER` y `ADMIN_PHONE_NUMBERS` autorizan comandos administrativos y reciben notificaciones de escalación por WhatsApp.
 - `ADMIN_SESSION_SECRET` debe ser distinto a `WEBHOOK_SECRET`.
 - el password se guarda hasheado en DB, no reversible
 - en el primer login el panel obliga a rotar ese password temporal
 - idealmente el panel debe ir detrás de `HTTPS` y una capa extra como VPN o allowlist de IP
+
+Para recuperar acceso por SSH:
+
+1. Edita `.env` en el servidor:
+
+```env
+ADMIN_BOOTSTRAP_USERNAME=admin
+ADMIN_BOOTSTRAP_PASSWORD=<password-temporal-fuerte>
+ADMIN_BOOTSTRAP_RESET_EXISTING=true
+```
+
+2. Reinicia `vanessa-app`.
+3. Entra a `/admin/login` con ese usuario y password temporal.
+4. Rota el password cuando el panel lo pida.
+5. Vuelve a dejar `ADMIN_BOOTSTRAP_RESET_EXISTING=false` y reinicia.
+
+## Catálogo de Fresha
+
+El bot puede sincronizar `service_catalog` desde un CSV exportado de Fresha. Ese archivo es operativo/local y no se versiona; `.gitignore` ignora `export_service_list_*.csv`.
+
+Configuración:
+
+```env
+FRESHA_SERVICE_CSV_PATH=export_service_list_2026-05-11.csv
+```
+
+Al iniciar, si el archivo existe, se hace upsert en `service_catalog` con fuente `fresha:csv`. También se puede ejecutar desde `/admin/ops` con `Sincronizar Fresha CSV`.
+
+Columnas usadas del CSV:
+
+- `Nombre del servicio`: nombre canónico que Sofía debe usar.
+- `Precio de compra`: precio importado como `base_price`.
+- `Duración`: se convierte a minutos, por ejemplo `1h 35m` -> `95`.
+- `Tiempo adicional`: se convierte a minutos.
+- `Impuestos`: porcentaje cuando Fresha lo exporta numérico.
+- `Descripción`: descripción del servicio.
+- `Nombre de la categoría`: categoría en `service_catalog`.
+- `Tipo de servicio`: ayuda a clasificar servicio, paquete, extra o nail art.
+- `ID del servicio`: `external_service_id` para casar futuras importaciones.
+
+El prompt del LLM recibe el catálogo activo desde DB y tiene instrucción de usar únicamente esos nombres exactos. Si un servicio no está claro contra el catálogo, Sofía debe preguntar una aclaración o escalar a recepción, no inventar paquetes.
 
 Genera una llave Fernet válida:
 

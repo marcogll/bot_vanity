@@ -51,9 +51,11 @@ class Settings(BaseSettings):
     android_play_store_url: str = "https://play.google.com/store/apps/details?id=com.fresha.Fresha"
     payment_url: str = "https://www.paypal.com/ncp/payment/L3AC4D47J3QDN"
     docs_path: str = "docs"
+    fresha_service_csv_path: str = "export_service_list_2026-05-11.csv"
     admin_webui_enabled: bool = True
     admin_bootstrap_username: str = "admin"
     admin_bootstrap_password: str = ""
+    admin_bootstrap_reset_existing: bool = False
     admin_session_cookie_name: str = "sofia_admin_session"
     admin_session_minutes: int = 120
     admin_session_secret: str = ""

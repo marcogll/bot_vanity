@@ -107,7 +107,7 @@ Ejemplo:
 Antes de cotizar con precisión, aclara solo si hace falta:
 
 - primero qué tipo de servicio busca dentro de uñas
-  - por ejemplo: gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies
+  - por ejemplo: gelish, manicure, uñas de acrílico, soft gel, pedicure o combo manos y pies
 - después, si aplica, pregunta si trae retiro
 - si preguntas por retiro, hazlo como aclaración natural de servicio, no como advertencia seca de cobro
 - puedes usar una línea breve como: `¿Requiere retiro de algún producto? _Gel, acrílico, polygel, etc._`

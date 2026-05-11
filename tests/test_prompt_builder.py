@@ -14,7 +14,7 @@ from app.conversation.prompt_builder import (
 
 def test_build_user_content_includes_state_buffer_and_pricing_hint() -> None:
     payload = PromptPayload(
-        message="Quiero acrílicas #3 con retiro y nail art iconic",
+        message="Quiero uñas de acrílico #3 con retiro y nail art iconic",
         push_name="Marco",
     )
     buffer = ConversationBuffer(customer_name="Marco", service="Uñas")

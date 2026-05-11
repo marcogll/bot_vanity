@@ -14,7 +14,7 @@ from sqlalchemy import desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.catalog_sync import sync_service_catalog_from_docs
+from app.catalog_sync import sync_service_catalog_from_docs, sync_service_catalog_from_fresha_csv
 from app.database import AsyncSessionLocal, get_db_session
 from app.janitor import purge_expired_records
 from app.knowledge_engine import get_knowledge_engine
@@ -288,6 +288,7 @@ async def dashboard(request: Request, db: AsyncSession = Depends(get_db_session)
           {_action_form('/admin/actions/clear-runtime', 'Limpiar Runtime', _csrf_input(_session_payload_from_request(request)))}
           {_action_form('/admin/actions/run-janitor', 'Ejecutar Janitor', _csrf_input(_session_payload_from_request(request)))}
           {_action_form('/admin/actions/sync-service-catalog', 'Sincronizar Servicios desde Docs', _csrf_input(_session_payload_from_request(request)))}
+          {_action_form('/admin/actions/sync-fresha-catalog', 'Sincronizar Servicios desde Fresha CSV', _csrf_input(_session_payload_from_request(request)))}
           {_action_form('/admin/actions/reload-docs', 'Recargar Docs', _csrf_input(_session_payload_from_request(request)))}
         </div>
       </article>
@@ -797,6 +798,7 @@ async def ops_page(request: Request, db: AsyncSession = Depends(get_db_session))
         {_action_form('/admin/actions/clear-runtime', 'Limpiar runtime', _csrf_input(session_payload))}
         {_action_form('/admin/actions/run-janitor', 'Ejecutar janitor', _csrf_input(session_payload))}
         {_action_form('/admin/actions/sync-service-catalog', 'Sincronizar servicios', _csrf_input(session_payload))}
+        {_action_form('/admin/actions/sync-fresha-catalog', 'Sincronizar Fresha CSV', _csrf_input(session_payload))}
         {_action_form('/admin/actions/reload-docs', 'Recargar docs', _csrf_input(session_payload))}
       </div>
     </section>
@@ -852,6 +854,17 @@ async def admin_action(action_name: str, request: Request, db: AsyncSession = De
     elif action_name == "sync-service-catalog":
         created, updated = await sync_service_catalog_from_docs(db, only_if_empty=False)
         message = f"Catálogo sincronizado desde docs. Creados: {created}. Actualizados: {updated}."
+    elif action_name == "sync-fresha-catalog":
+        settings = get_settings()
+        created, updated = await sync_service_catalog_from_fresha_csv(
+            db,
+            settings.fresha_service_csv_path,
+            only_if_exists=True,
+        )
+        message = (
+            f"Catálogo sincronizado desde Fresha CSV. Creados: {created}. "
+            f"Actualizados: {updated}. Archivo: {settings.fresha_service_csv_path}."
+        )
     elif action_name == "clear-memory":
         whatsapp_id = form.get("whatsapp_id", "").strip()
         if not whatsapp_id:
@@ -912,6 +925,9 @@ async def bootstrap_admin_user() -> None:
         result = await db.execute(select(AdminUser).where(AdminUser.username == settings.admin_bootstrap_username))
         existing = result.scalar_one_or_none()
         if existing is not None:
+            if settings.admin_bootstrap_reset_existing:
+                _apply_bootstrap_password(existing, settings.admin_bootstrap_password)
+                await db.commit()
             return
         db.add(
             AdminUser(
@@ -926,6 +942,18 @@ async def bootstrap_admin_user() -> None:
             )
         )
         await db.commit()
+
+
+def _apply_bootstrap_password(user: AdminUser, password: str) -> None:
+    user.password_hash = hash_password(password)
+    user.password_algo = "scrypt"
+    user.is_active = True
+    user.is_superadmin = True
+    user.temporary_password = True
+    user.must_rotate_password = True
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.password_expires_at = datetime.now(UTC) + timedelta(days=1)
 
 
 def _render_page(title: str, body: str, request: Request, current_user: AdminUser | None) -> str:

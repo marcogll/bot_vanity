@@ -1,58 +1,30 @@
 # PROMOS.MD: Promociones y Paquetes Vigentes
 
-Este archivo contiene las ofertas temporales y los combos permanentes. Sofía debe priorizar estos paquetes cuando detecte que el cliente busca más de un servicio o pregunta por "promociones".
+Fuente canónica: exportación de Fresha `export_service_list_2026-05-11.csv`.
+
+Sofía solo puede ofrecer los paquetes listados aquí. No debe inventar promociones, renombrar paquetes ni usar promociones anteriores que ya no aparecen en Fresha.
 
 ---
 
-## 🤍 CAMPAÑA: HELLO APRIL (Vigencia: Abril 2026)
-*Paquetes exclusivos diseñados para la temporada de primavera. Disponibles por tiempo limitado.*
+## CAMPAÑA: HELLO MAY
 
-- **GELISH GLOW** *(Gelish Manos + Gelish Pies)* | $700 | 95 min.
-  *Descripción:* Consiente tus manos y pies con el perfecto equilibrio entre elegancia y cuidado. Incluye aplicación de gel en manos con tu color favorito para un acabado brillante y duradero, más gel en pies para mantenerlos impecables y relucientes.
+- **SHINE DELUXE (manicure + pedicure deluxe)** | $1,500 | 180 min.
+  *Descripción:* Consiente tus manos y pies con nuestro paquete Deluxe: manicure y pedicure con exfoliación, mascarilla, masaje relajante y esmaltado perfecto.
 
-- **SOFT ESSENCE** *(Soft Gel + Vanity Essence)* | $630 | 95 min.
-  *Descripción:* Disfruta de la rapidez y sofisticación de nuestras uñas Press On, acompañadas del toque exclusivo de Vanity Essence para un acabado impecable y elegante en cada detalle.
+- **GELISH GLOW (gelish manos y pies)** | $700 | 95 min.
+  *Descripción:* Paquete de gel en manos y gel en pies para mantener manos y pies impecables y relucientes.
 
-- **DUO DELUXE** *(Gelish Manos + Pedicure SPA)* | $1,200 | 145 min.
-  *Descripción:* Una experiencia que va más allá de lo básico. Disfruta de nuestro Pedicure SPA con una sensación profunda de relajación, mientras tus manos lucen perfectas con gel de acabado impecable. El equilibrio ideal entre cuidado, estilo y detalle.
+- **SPA GLAMOUR (gelish manos + pedicure spa)** | $1,150 | 140 min.
+  *Descripción:* Pedicure SPA con sensación profunda de relajación y gel en manos con acabado impecable.
 
-- **CLASSIC GLOW** *(Uñas Acrílicas + Pedi Classic)* | $1,250 | 165 min.
-  *Descripción:* El combo perfecto para verte y sentirte increíble. Disfruta de un Pedi Classic que cuida y relaja tus pies, mientras transformamos tus manos con unas uñas acrílicas impecables. Un momento para ti, donde cada detalle cuenta.
-
-- **RUBBER SHINE** *(Base Rubber + Gel Manos)* | $1,100 | 125 min.
-  *Descripción:* Fortaleza y duración para tus uñas. La Base Rubber protege y nivela, mientras que el Gel aporta brillo y resistencia por semanas. ¡Uñas impecables por más tiempo!
-
-- **PERFECT BROWS** *(Laminado de Ceja + Depilación)* | $950 | 70 min.
-  *Descripción:* Logra cejas definidas y un acabado suave. El laminado da forma y volumen a tus cejas, mientras que la depilación deja tu piel libre de vellos para un look impecable.
-
----
-
-## 🎁 PAQUETES PERMANENTES (Combos de Valor)
-*Nuestros favoritos de siempre con un precio preferencial al contratarlos juntos.*
-
-- **GELISH GLOW (Mani + Pedi Gelish)** | $700 | 95 min.
-  *La opción práctica y elegante para quienes aman el color duradero en manos y pies.*
-
-- **MAGIC EXPERIENCE (Mani + Pedi Deluxe)** | $1,500 | 180 min.
-  *Máximo consentimiento: incluye toda la experiencia sensorial de nuestra línea Deluxe en ambos servicios.*
-
-- **BEAUTY ON POINT** | $1,950 | 165 min.
-  *Combo de alto impacto: Maquillaje, ondas (Hair Waves) y Manicura con Gelish.*
-
-- **PERFECT LOOK** | $1,950 | 135 min.
-  *Enfocado en realzar la mirada: Henna en cejas y Lash Lifting para pestañas rizadas naturalmente.*
-
----
-
-## ⚡ PROMOS FLASH & EXTRAS
-
-- **Pedi Classic + Gelish Manos** | $1,050
-- **Biolaminado de Ceja** | $850
+- **RUBBER SHINE (base rubber + gel manos)** | $1,100 | 125 min.
+  *Descripción:* Base Rubber para proteger y nivelar la uña, más gel en manos para brillo y resistencia.
 
 ---
 
 # INSTRUCCIONES PARA SOFÍA:
-1. **Verificación de Fecha:** Antes de ofrecer los paquetes "Hello April", confirma que la fecha actual esté dentro de abril de 2026.
-2. **Sugerencia Proactiva:** Si un cliente pregunta por "Uñas y Pedicura", ofrece inmediatamente el paquete **CLASSIC GLOW** o **DUO DELUXE** resaltando el ahorro vs. contratar los servicios por separado.
-3. **Cierre:** Menciona que al ser paquetes de larga duración, es indispensable agendar con tiempo a través de la liga de Fresh para asegurar el espacio de la especialista.
-4. **Cross-selling:** Siempre preguntar por Nail Art (Vanity Essence / Art / Iconic) y Extras (Vitamina, Retiro de uñas) al agendar para calcular el tiempo correcto de la cita.
+1. Usa los nombres exactos de Fresha tal como aparecen arriba.
+2. No menciones paquetes anteriores como HELLO APRIL, SOFT ESSENCE, DUO DELUXE, CLASSIC GLOW, PERFECT BROWS, MAGIC EXPERIENCE, BEAUTY ON POINT, PERFECT LOOK, Pedi Classic + Gelish Manos ni Biolaminado de Ceja.
+3. Si la clienta pide promociones, ofrece solo paquetes que correspondan a su intención. No mezcles categorías no solicitadas.
+4. Para servicios de uñas, antes de cerrar pide retiro y diseño/Nail Art cuando aplique, para calcular bien el tiempo.
+5. La disponibilidad real siempre se elige en Fresha; Sofía no confirma horarios.

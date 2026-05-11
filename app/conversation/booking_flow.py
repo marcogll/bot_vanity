@@ -24,6 +24,9 @@ class BookingItem:
     minutes: int
 
 
+GELISH_GLOW_SERVICE_NAME = "GELISH GLOW (gelish manos y pies)"
+
+
 def normalize_text_for_matching(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value.casefold())
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
@@ -32,7 +35,10 @@ def normalize_text_for_matching(value: str) -> str:
 
 def detect_service(message: str) -> str | None:
     normalized = message.casefold()
+    normalized_for_matching = normalize_text_for_matching(message)
     if any(word in normalized for word in ("uña", "unas", "manicure", "pedicure", "pedi", "gelish", "acrilic", "acrílic", "polygel", "poly gel")):
+        return "Uñas"
+    if _is_gelish_hands_and_feet(normalized_for_matching):
         return "Uñas"
     if any(word in normalized for word in ("pestaña", "lash", "lifting")):
         return "Pestañas"
@@ -44,7 +50,7 @@ def detect_service(message: str) -> str | None:
 def detect_nail_subservice(message: str) -> str | None:
     normalized = normalize_text_for_matching(message)
     if _is_gelish_hands_and_feet(normalized):
-        return "GELISH GLOW"
+        return GELISH_GLOW_SERVICE_NAME
     if "combo" in normalized or ("manicure" in normalized and "pedicure" in normalized):
         return "Combo manos y pies"
     if "pedicure" in normalized or "pedi" in normalized:
@@ -58,7 +64,7 @@ def detect_nail_subservice(message: str) -> str | None:
     if "gelish" in normalized:
         return "Gelish"
     if "acrilic" in normalized or "acrilicas" in normalized:
-        return "Acrílicas"
+        return "Uñas de acrílico"
     if "rubber" in normalized:
         return "Base Rubber"
     return None
@@ -69,6 +75,11 @@ def booking_flow_reply(
     history: list[dict[str, str]],
     settings: BookingFlowSettings,
 ) -> BookingFlowReply | None:
+    if last_assistant_requested_nail_subservice(history):
+        subservice = detect_nail_subservice(message)
+        if subservice:
+            return BookingFlowReply(_retiro_question_for_subservice(subservice))
+
     if last_assistant_offered_booking(history) and _is_positive_short_answer(message) and _history_has_nail_booking_detail(history):
         summary = _latest_booking_summary(history) or build_booking_summary("", history)
         user_messages = [
@@ -172,6 +183,29 @@ def last_assistant_requested_design_preference(history: list[dict[str, str]]) ->
     return (
         "tiene algo en mente" in normalized
         and ("diseno" in normalized or "tecnica" in normalized or "tono liso" in normalized)
+    )
+
+
+def last_assistant_requested_nail_subservice(history: list[dict[str, str]]) -> bool:
+    last = _last_assistant_message(history)
+    if not last:
+        return False
+    normalized = normalize_text_for_matching(last)
+    required_tokens = ("gelish", "manicure", "soft gel", "pedicure")
+    return all(token in normalized for token in required_tokens) and (
+        "unas de acrilico" in normalized or "acrilicas" in normalized
+    )
+
+
+def _retiro_question_for_subservice(subservice: str) -> str:
+    if subservice == GELISH_GLOW_SERVICE_NAME:
+        return (
+            f"Perfecto 💗 Para Gelish en manos y pies tenemos {GELISH_GLOW_SERVICE_NAME}. "
+            "¿Requiere retiro de algún producto? _Gel, acrílico, polygel, etc._"
+        )
+    return (
+        f"Perfecto 💗 Para {subservice}, ¿requiere retiro de algún producto? "
+        "_Gel, acrílico, polygel, etc._"
     )
 
 
@@ -340,13 +374,13 @@ def _booking_items(summary: str) -> list[BookingItem]:
             _append_unique_booking_item(items, BookingItem("Retiro de Gel/Acrílico", 20))
             continue
         if "gelish glow" in normalized or _is_gelish_hands_and_feet(normalized):
-            _append_unique_booking_item(items, BookingItem("GELISH GLOW (Gelish Manos + Gelish Pies)", 95))
+            _append_unique_booking_item(items, BookingItem(GELISH_GLOW_SERVICE_NAME, 95))
         elif "polygel" in normalized:
             _append_unique_booking_item(items, BookingItem("Polygel Extensions", 90))
         elif "soft gel" in normalized:
             _append_unique_booking_item(items, BookingItem("Soft Gel", 90))
         elif "acrilic" in normalized or "acrilicas" in normalized:
-            _append_unique_booking_item(items, BookingItem("Acrílicas", 90))
+            _append_unique_booking_item(items, BookingItem("Uñas de acrílico", 90))
         elif "gelish" in normalized:
             _append_unique_booking_item(items, BookingItem("Gelish", 60))
         elif "pedicure" in normalized:
@@ -473,13 +507,13 @@ def _summary_part_from_booking_item_name(service_name: str) -> str | None:
     if "retiro" in normalized:
         return "Retiro de Gel/Acrílico"
     if "gelish glow" in normalized:
-        return "GELISH GLOW"
+        return GELISH_GLOW_SERVICE_NAME
     if "polygel" in normalized:
         return "Polygel"
     if "soft gel" in normalized:
         return "Soft Gel"
     if "acrilic" in normalized or "acrilicas" in normalized:
-        return "Acrílicas"
+        return "Uñas de acrílico"
     if "pedicure" in normalized:
         return "Pedicure Vanity CLASSIC"
     if "manicure" in normalized:

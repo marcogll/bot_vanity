@@ -248,7 +248,7 @@ def test_human_handover_marker_is_detected() -> None:
 
 
 def test_pricing_estimate_adds_base_retiro_and_nail_art() -> None:
-    estimate = estimate_from_message("Quiero acrílicas #3 con retiro y nail art iconic")
+    estimate = estimate_from_message("Quiero uñas de acrílico #3 con retiro y nail art iconic")
 
     assert estimate is not None
     assert estimate.total_price == 1070
@@ -408,7 +408,7 @@ def test_service_only_followup_handles_third_party_service_prompt_variant() -> N
 
     assert reply is not None
     assert "Antes de agendar" in reply
-    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
+    assert "gelish, manicure, uñas de acrílico, soft gel, pedicure" in reply
 
 
 def test_nail_subservice_followup_separates_retiro_from_narrowing() -> None:
@@ -417,7 +417,7 @@ def test_nail_subservice_followup_separates_retiro_from_narrowing() -> None:
         Interaccion(
             "5218446686100@s.whatsapp.net",
             MessageRole.assistant,
-            "¡Perfecto! Antes de agendar, te ayudo a ubicar la mejor opción. 💗 ¿Busca gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies?",
+            "¡Perfecto! Antes de agendar, te ayudo a ubicar la mejor opción. 💗 ¿Busca gelish, manicure, uñas de acrílico, soft gel, pedicure o combo manos y pies?",
         ),
     ]
 
@@ -720,7 +720,7 @@ def test_audio_payload_helpers_detect_audio_and_filename() -> None:
 def test_whatsapp_reply_format_converts_markdown_links_and_bold() -> None:
     reply = (
         "Agenda aquí: [https://vanityexperience.mx/booking](https://vanityexperience.mx/booking)\n"
-        "También tenemos **Acrílicas** y [anticipo](https://pay.example/test)."
+        "También tenemos **Uñas de acrílico** y [anticipo](https://pay.example/test)."
     )
 
     formatted = _format_whatsapp_reply(reply)
@@ -728,7 +728,7 @@ def test_whatsapp_reply_format_converts_markdown_links_and_bold() -> None:
     assert "[https://vanityexperience.mx/booking]" not in formatted
     assert "(https://vanityexperience.mx/booking)" not in formatted
     assert "https://vanityexperience.mx/booking" in formatted
-    assert "*Acrílicas*" in formatted
+    assert "*Uñas de acrílico*" in formatted
     assert "**" not in formatted
     assert "anticipo: https://pay.example/test" in formatted
 
@@ -1197,7 +1197,7 @@ def test_name_only_reply_uses_prior_audio_intent_after_initial_greeting() -> Non
     assert "Gracias, Marco" in reply
     assert "buscas agendar" in reply
     assert "Antes de agendar" in reply
-    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
+    assert "gelish, manicure, uñas de acrílico, soft gel, pedicure" in reply
     assert "qué servicio buscas" not in reply
 
 
@@ -1252,7 +1252,27 @@ def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
 
     assert reply is not None
     assert "Antes de agendar" in reply
-    assert "gelish, manicure, acrílicas, soft gel, pedicure" in reply
+    assert "gelish, manicure, uñas de acrílico, soft gel, pedicure" in reply
+
+
+def test_service_only_specific_gel_hands_and_feet_asks_retiro_without_llm() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {
+                "role": MessageRole.assistant,
+                "content": "¡Gracias, Alejandra! Encantada de atenderte. 💗 Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?",
+            },
+        )()
+    ]
+
+    reply = _service_only_followup_reply("Quiero gel manos y pies", history)
+
+    assert reply is not None
+    assert "GELISH GLOW" in reply
+    assert "retiro" in reply
+    assert "qué servicio buscas" not in reply
 
 
 def test_nail_options_question_does_not_need_llm() -> None:
@@ -1275,7 +1295,7 @@ def test_nail_options_question_does_not_need_llm() -> None:
     assert reply is not None
     assert "Retiro de Gel/Acrílico: $150" in reply
     assert "Gelish en manos: $350" in reply
-    assert "Acrílicas" in reply
+    assert "Uñas de acrílico" in reply
     assert "Soft Gel" in reply
 
 

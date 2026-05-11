@@ -98,13 +98,13 @@ Acción:
 
 Ejemplo:
 
-`Perfecto 💗 Antes de agendar, te ayudo a ubicar la mejor opción. ¿Busca gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies?`
+`Perfecto 💗 Antes de agendar, te ayudo a ubicar la mejor opción. ¿Busca gelish, manicure, uñas de acrílico, soft gel, pedicure o combo manos y pies?`
 
 ### 5. Cliente responde subtipo de uñas
 
 Ejemplos:
 
-- `Acrílicas`
+- `Uñas de acrílico`
 - `Pedicure`
 - `Uñas y pedicure`
 - `Gelish`

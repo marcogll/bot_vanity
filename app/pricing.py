@@ -69,12 +69,12 @@ def _detect_base_service(normalized: str) -> PriceItem | None:
         return PriceItem("Manicure Vanity SPA", 600, 85)
     if "classic" in normalized and any(word in normalized for word in ("manicure", "mani", "uña")):
         return PriceItem("Manicure Vanity CLASSIC", 550, 80)
-    if any(word in normalized for word in ("acrílica", "acrilica", "acrilicas", "acrílicas")):
+    if any(word in normalized for word in ("acrílico", "acrilico", "acrílica", "acrilica", "acrilicas", "acrílicas")):
         if any(size in normalized for size in ("#5", "#6", "5", "6")):
-            return PriceItem("Acrílicas Tamaño #5 - #6", 650, 120)
+            return PriceItem("Uñas de acrílico Tamaño #5 - #6", 650, 120)
         if any(size in normalized for size in ("#3", "#4", "3", "4")):
-            return PriceItem("Acrílicas Tamaño #3 - #4", 600, 105)
-        return PriceItem("Acrílicas Tamaño #1 - #2", 550, 85)
+            return PriceItem("Uñas de acrílico Tamaño #3 - #4", 600, 105)
+        return PriceItem("Uñas de acrílico Tamaño #1 - #2", 550, 85)
     if "soft gel" in normalized:
         if any(size in normalized for size in ("#3", "#4", "3", "4")):
             return PriceItem("Soft Gel Tamaño #3 - #4", 550, 90)

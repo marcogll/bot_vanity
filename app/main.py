@@ -37,7 +37,7 @@ from app.tools.vision import (
     analyze_booking_confirmation_image,
     analyze_payment_proof_image,
 )
-from app.catalog_sync import sync_service_catalog_from_docs
+from app.catalog_sync import sync_service_catalog_from_docs, sync_service_catalog_from_fresha_csv
 from app.channels.whatsapp import (
     EvolutionWebhookPayload,
     digits_only,
@@ -90,7 +90,7 @@ from app.database import AsyncSessionLocal, Base, close_db, init_db
 from app.evolution import send_text_message
 from app.janitor import janitor_loop
 from app.knowledge_engine import get_knowledge_engine
-from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, SesionMemoria, WebhookEvent
+from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, ServiceCatalog, SesionMemoria, WebhookEvent
 from app.rate_limit import InMemoryRateLimiter
 from app.security import looks_like_prompt_injection, validate_webhook_api_key
 from app.tenants import TenantConfigError, load_tenant_config
@@ -142,6 +142,18 @@ async def startup() -> None:
     await init_db()
     await bootstrap_admin_user()
     async with AsyncSessionLocal() as db:
+        fresha_created, fresha_updated = await sync_service_catalog_from_fresha_csv(
+            db,
+            settings.fresha_service_csv_path,
+            only_if_exists=True,
+        )
+        if fresha_created or fresha_updated:
+            logger.info(
+                "Service catalog synced from Fresha CSV: created=%s updated=%s path=%s",
+                fresha_created,
+                fresha_updated,
+                settings.fresha_service_csv_path,
+            )
         await sync_service_catalog_from_docs(db, only_if_empty=True)
     app.state.janitor_task = asyncio.create_task(
         janitor_loop(settings.janitor_interval_seconds)
@@ -992,6 +1004,9 @@ async def generate_assistant_reply(
         current_datetime=datetime.now(UTC),
         memory_context=memory_context,
     )
+    catalog_hint = await _service_catalog_prompt_hint()
+    if catalog_hint:
+        system_prompt = f"{system_prompt}\n\n{catalog_hint}"
 
     conversation_state = _derive_conversation_state(payload, history, memory, pending, completed, settings)
     messages = build_prompt_messages(
@@ -1018,6 +1033,32 @@ async def generate_assistant_reply(
         logger.warning("OpenAI returned an empty response")
         return _technical_fallback_reply(payload, history)
     return content.strip()
+
+
+async def _service_catalog_prompt_hint() -> str:
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(ServiceCatalog)
+            .where(ServiceCatalog.is_active.is_(True))
+            .order_by(ServiceCatalog.category, ServiceCatalog.name)
+        )
+        services = result.scalars().all()
+    if not services:
+        return ""
+    rows = [
+        (
+            f"- {item.name} | categoría: {item.category} | tipo: {item.service_type} | "
+            f"precio: ${item.base_price:g} | duración: {item.duration_minutes} min"
+        )
+        for item in services
+    ]
+    return (
+        "Catálogo canónico de Fresha/service_catalog:\n"
+        "Usa únicamente estos nombres exactos para servicios, paquetes, extras y promociones. "
+        "No inventes ni renombres servicios. Si la intención no corresponde claramente a uno de estos nombres, "
+        "pregunta una aclaración o di que lo revisará recepción.\n"
+        + "\n".join(rows)
+    )
 
 
 def _build_user_content(
@@ -1507,6 +1548,13 @@ def _service_only_followup_reply(message: str, history: list[Interaccion]) -> st
     service = _detect_service(message)
     if not service:
         return None
+    nail_subservice = detect_nail_subservice(message)
+    normalized = _normalize_text_for_matching(message)
+    if nail_subservice and "unas y" not in normalized:
+        return (
+            f"¡Perfecto! Para {nail_subservice}, ¿necesitas retiro de algún material previo, "
+            "como gel, acrílico o polygel?"
+        )
     return _service_details_reply(service, "¡Perfecto! ")
 
 
@@ -1514,7 +1562,7 @@ def _service_details_reply(service: str, greeting: str) -> str | None:
     if service == "Uñas":
         return (
             f"{greeting}Antes de agendar, te ayudo a ubicar la mejor opción. 💗 "
-            "¿Busca gelish, manicure, acrílicas, soft gel, pedicure o combo manos y pies?"
+            "¿Busca gelish, manicure, uñas de acrílico, soft gel, pedicure o combo manos y pies?"
         )
     if service == "Pestañas":
         return (
@@ -1576,7 +1624,7 @@ def _nail_options_followup_reply(message: str, history: list[Interaccion]) -> st
         "Manicure SPA: $600 | 85 min\n"
         "Manicure Deluxe: $650 | 90 min\n"
         "Base Rubber: $750 | 70 min\n"
-        "Acrílicas: #1-#2 $550, #3-#4 $600, #5-#6 $650\n"
+        "Uñas de acrílico: #1-#2 $550, #3-#4 $600, #5-#6 $650\n"
         "Soft Gel: #1-#2 $500, #3-#4 $550\n\n"
         "Para recomendarte mejor, ¿buscas trabajar sobre tu uña natural o quieres extensión? 💗"
     )
@@ -1629,8 +1677,10 @@ def _last_assistant_requested_nail_subservice(history: list[Interaccion]) -> boo
     if last.role != MessageRole.assistant:
         return False
     normalized = _normalize_text_for_matching(last.content)
-    required_tokens = ("gelish", "manicure", "acrilicas", "soft gel", "pedicure")
-    return all(token in normalized for token in required_tokens)
+    required_tokens = ("gelish", "manicure", "soft gel", "pedicure")
+    return all(token in normalized for token in required_tokens) and (
+        "unas de acrilico" in normalized or "acrilicas" in normalized
+    )
 
 
 def _last_assistant_requested_name(history: list[Interaccion]) -> bool:
