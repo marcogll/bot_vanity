@@ -211,7 +211,10 @@ async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, setti
     try:
         payload = EvolutionWebhookPayload.model_validate_json(raw_body)
     except Exception:
-        logger.exception("Ignoring webhook with invalid payload: raw_body=%s", raw_body.decode("utf-8", errors="replace")[:4000])
+        logger.exception(
+            "Ignoring webhook with invalid payload: raw_body=%s",
+            raw_body.decode("utf-8", errors="replace")[:4000],
+        )
         return
 
     if not _is_supported_message_event(payload, request_path):
