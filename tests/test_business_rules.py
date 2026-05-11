@@ -123,6 +123,30 @@ def test_should_handle_in_test_mode_allows_admin_even_if_not_allowlisted() -> No
     assert _should_handle_in_test_mode(payload, settings)
 
 
+def test_should_handle_in_test_mode_allows_lid_payload_reply_candidate() -> None:
+    settings = type(
+        "Settings",
+        (),
+        {
+            "test_mode_allowed_numbers": "528441112233",
+            "admin_phone_number": "",
+            "admin_phone_numbers": "",
+        },
+    )()
+    payload = EvolutionWebhookPayload.model_validate(
+        {
+            "instance": "sofia",
+            "data": {
+                "key": {"remoteJid": "249391621378064@lid", "fromMe": False},
+                "message": {"conversation": "Hola"},
+                "metadata": {"contact": "5218441112233@s.whatsapp.net"},
+            },
+        }
+    )
+
+    assert _should_handle_in_test_mode(payload, settings)
+
+
 def test_test_session_export_includes_admin_even_if_not_allowlisted() -> None:
     settings = type(
         "Settings",

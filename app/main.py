@@ -241,7 +241,12 @@ async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, setti
         )
         return
     if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
-        logger.info("Ignoring inbound webhook outside allowlist during test mode for %s", payload.remote_jid)
+        logger.warning(
+            "Ignoring inbound webhook outside allowlist during test mode: remote_jid=%s sender=%s candidates=%s",
+            payload.remote_jid,
+            payload.sender,
+            payload.reply_candidates,
+        )
         return
     if rate_limiter is not None:
         try:
@@ -345,7 +350,19 @@ def _is_test_mode_allowed_number(whatsapp_id: str, settings: Settings) -> bool:
 
 
 def _should_handle_in_test_mode(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
-    return _is_test_mode_allowed_number(payload.remote_jid, settings) or _is_authorized_admin(payload, settings)
+    return _payload_matches_allowed_number(payload, settings.test_mode_allowed_numbers) or _is_authorized_admin(payload, settings)
+
+
+def _payload_matches_allowed_number(payload: EvolutionWebhookPayload, raw_allowed_numbers: str) -> bool:
+    allowed_numbers = _parse_test_mode_allowed_numbers(raw_allowed_numbers)
+    if not allowed_numbers:
+        return False
+    candidates = [
+        payload.remote_jid,
+        payload.sender or "",
+        *payload.reply_candidates,
+    ]
+    return any(_normalized_whatsapp_digits(candidate) in allowed_numbers for candidate in candidates)
 
 
 def _parse_runtime_v2_allowed_numbers(settings: Settings) -> set[str]:
