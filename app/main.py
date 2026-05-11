@@ -38,7 +38,7 @@ from app.tools.vision import (
     analyze_booking_confirmation_image,
     analyze_payment_proof_image,
 )
-from app.catalog_sync import sync_service_catalog_from_docs, sync_service_catalog_from_fresha_csv
+from app.catalog_sync import sync_service_catalog_from_fresha_csv
 from app.channels.whatsapp import (
     EvolutionWebhookPayload,
     digits_only,
@@ -53,9 +53,11 @@ from app.channels.whatsapp import (
 )
 from app.config import Settings, get_settings
 from app.conversation.booking_flow import (
+    BookingItem,
     BookingFlowReply,
     BookingFlowSettings,
     booking_flow_reply,
+    normalize_text_for_matching,
     detect_nail_subservice,
     detect_service,
 )
@@ -155,7 +157,6 @@ async def startup() -> None:
                 fresha_updated,
                 settings.fresha_service_csv_path,
             )
-        await sync_service_catalog_from_docs(db, only_if_empty=True)
     app.state.janitor_task = asyncio.create_task(
         janitor_loop(settings.janitor_interval_seconds)
     )
@@ -914,6 +915,20 @@ async def _handle_webhook_payload(
         logger.info("Reply sent: remote_jid=%s flow=initial_greeting", payload.remote_jid)
         return
 
+    catalog_guided_reply = await _catalog_guided_booking_reply(db, payload.message, history, settings)
+    if catalog_guided_reply:
+        _update_conversation_buffer_from_assistant_reply(
+            conversation_buffer,
+            _derive_conversation_state(payload, history, memory, pending, completed, settings),
+            catalog_guided_reply.text,
+        )
+        await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, catalog_guided_reply.text, tenant_id=_tenant_id(settings))
+        _schedule_test_session_export(payload.remote_jid, settings)
+        _log_runtime_v2_comparison(runtime_v2_evaluation, v1_flow="catalog_guided_booking", v1_reply=catalog_guided_reply.text)
+        await _send_reply(payload, catalog_guided_reply.text)
+        logger.info("Reply sent: remote_jid=%s flow=catalog_guided_booking", payload.remote_jid)
+        return
+
     name_only_reply = _name_and_service_followup_reply(payload.message, history) or _name_only_followup_reply(payload.message, history)
     if name_only_reply:
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "collecting_service", name_only_reply)
@@ -924,7 +939,7 @@ async def _handle_webhook_payload(
         logger.info("Reply sent: remote_jid=%s flow=name_followup_without_llm", payload.remote_jid)
         return
 
-    local_booking_reply = _booking_flow_local_reply(payload.message, history, settings)
+    local_booking_reply = await _booking_flow_local_reply(db, payload.message, history, settings)
     if local_booking_reply:
         _update_conversation_buffer_from_assistant_reply(
             conversation_buffer,
@@ -1265,11 +1280,44 @@ def _state_history(history: list[Interaccion]) -> list[StateMessage]:
     ]
 
 
-def _booking_flow_local_reply(
+async def _catalog_guided_booking_reply(
+    db: AsyncSession,
     message: str,
     history: list[Interaccion],
     settings: Settings,
 ) -> BookingFlowReply | None:
+    del settings
+    normalized = normalize_text_for_matching(message)
+    catalog_items = await _active_catalog_booking_items(db)
+    if not catalog_items:
+        return None
+
+    if _last_assistant_listed_catalog_options(history):
+        selected = _select_catalog_item_from_message(message, catalog_items)
+        if selected:
+            return BookingFlowReply(
+                f"Perfecto 💗 Para {selected.name}, ¿requiere retiro de algún producto? "
+                "_Gel, acrílico, polygel, etc._"
+            )
+        if _is_positive_short_answer_for_catalog(normalized):
+            return BookingFlowReply("Claro 💗 ¿Cuál paquete te gustaría reservar?")
+
+    if _message_requests_catalog_packages(normalized) and _has_recent_nail_context(message, history):
+        package_items = _catalog_package_options(catalog_items)
+        if not package_items:
+            return None
+        return BookingFlowReply(_catalog_package_options_reply(package_items))
+
+    return None
+
+
+async def _booking_flow_local_reply(
+    db: AsyncSession,
+    message: str,
+    history: list[Interaccion],
+    settings: Settings,
+) -> BookingFlowReply | None:
+    catalog_items = await _active_catalog_booking_items(db)
     return booking_flow_reply(
         message,
         _booking_flow_history(history),
@@ -1277,6 +1325,7 @@ def _booking_flow_local_reply(
             booking_url=settings.booking_url,
             ios_app_store_url=settings.ios_app_store_url,
             android_play_store_url=settings.android_play_store_url,
+            catalog_items=tuple(catalog_items),
         ),
     )
 
@@ -1286,6 +1335,98 @@ def _booking_flow_history(history: list[Interaccion]) -> list[dict[str, str]]:
         {"role": item.role.value, "content": item.content}
         for item in history[-8:]
     ]
+
+
+async def _active_catalog_booking_items(db: AsyncSession) -> list[BookingItem]:
+    result = await db.execute(
+        select(ServiceCatalog)
+        .where(ServiceCatalog.is_active.is_(True))
+        .order_by(ServiceCatalog.category, ServiceCatalog.name)
+    )
+    return [
+        BookingItem(item.name, item.duration_minutes)
+        for item in result.scalars().all()
+        if item.name and item.duration_minutes > 0
+    ]
+
+
+def _message_requests_catalog_packages(normalized_message: str) -> bool:
+    return any(
+        marker in normalized_message
+        for marker in (
+            "promo",
+            "promocion",
+            "promociones",
+            "paquete",
+            "paquetes",
+            "combo",
+            "combos",
+            "manos y pies",
+        )
+    )
+
+
+def _catalog_package_options(catalog_items: list[BookingItem]) -> list[BookingItem]:
+    package_markers = (
+        "gelish glow",
+        "shine deluxe",
+        "spa glamour",
+        "rubber shine",
+        "manicure + pedicure",
+        "gelish manos y pies",
+        "gelish manos + pedicure",
+        "base rubber + gel",
+    )
+    options: list[BookingItem] = []
+    for item in catalog_items:
+        normalized = normalize_text_for_matching(item.name)
+        if any(marker in normalized for marker in package_markers):
+            options.append(item)
+    return options[:4]
+
+
+def _catalog_package_options_reply(items: list[BookingItem]) -> str:
+    lines = ["Sí 💗 Estas son las promociones/paquetes activos en Fresha para uñas:"]
+    lines.extend(f"- {item.name}: {item.minutes} min" for item in items)
+    lines.append("")
+    lines.append("¿Cuál te gustaría reservar?")
+    return "\n".join(lines)
+
+
+def _last_assistant_listed_catalog_options(history: list[Interaccion]) -> bool:
+    for item in reversed(history[-4:]):
+        if item.role != MessageRole.assistant:
+            continue
+        normalized = normalize_text_for_matching(item.content)
+        return "promociones/paquetes activos en fresha" in normalized and "cual te gustaria reservar" in normalized
+    return False
+
+
+def _select_catalog_item_from_message(message: str, catalog_items: list[BookingItem]) -> BookingItem | None:
+    normalized_message = normalize_text_for_matching(message)
+    if not normalized_message:
+        return None
+    for item in catalog_items:
+        normalized_name = normalize_text_for_matching(item.name)
+        if normalized_message == normalized_name or normalized_message in normalized_name:
+            return item
+    significant_tokens = [
+        token
+        for token in normalized_message.split()
+        if len(token) > 3 and token not in {"quiero", "reservar", "paquete", "combo", "promocion"}
+    ]
+    if not significant_tokens:
+        return None
+    matches = [
+        item
+        for item in catalog_items
+        if all(token in normalize_text_for_matching(item.name) for token in significant_tokens)
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _is_positive_short_answer_for_catalog(normalized_message: str) -> bool:
+    return normalized_message in {"si", "claro", "ok", "okay", "va", "sale"}
 
 
 

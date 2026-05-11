@@ -155,9 +155,9 @@ brand_voice:
 
 Actividades:
 
-- Mantener compatibilidad con `docs/knowledge_base.md`.
+- Usar `service_catalog` como fuente única de servicios, extras, precios, duraciones y vigencia.
 - Definir una estructura normalizada para servicios, extras, precios, duraciones y vigencia.
-- Evitar que pricing dependa de parsing libre de prompt.
+- Evitar que precios dependan de parsing libre de prompt.
 
 ### Tarea 6: Crear `BusinessPolicyPack`
 
@@ -311,12 +311,7 @@ tenants/vanity/
   policies/
     booking.md
     escalation.md
-    pricing.md
     latency.md
-  knowledge/
-    services.md
-    promos.md
-    payments.md
 ```
 
 ### Tarea 15: Modificar `KnowledgeEngine`

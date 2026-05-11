@@ -1,18 +1,4 @@
-from app.catalog_sync import parse_services_from_docs, parse_services_from_fresha_csv
-
-
-def test_parse_services_from_docs_loads_catalog_and_promos() -> None:
-    services = parse_services_from_docs()
-
-    names = {item.name for item in services}
-
-    assert "Manicure Vanity DELUXE" in names
-    assert "Gelish (Manos)" in names
-    assert "GELISH GLOW (gelish manos y pies)" in names
-    assert "SHINE DELUXE (manicure + pedicure deluxe)" in names
-    assert "PERFECT LOOK" not in names
-    assert any(item.source == "docs:knowledge_base" for item in services)
-    assert any(item.source == "docs:promos" for item in services)
+from app.catalog_sync import parse_services_from_fresha_csv
 
 
 def test_parse_services_from_fresha_csv_uses_fresha_names_prices_and_duration(tmp_path) -> None:

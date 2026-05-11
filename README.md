@@ -37,8 +37,8 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Protección básica contra prompt injection en texto y audio
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
-- Panel admin `/admin` con siembra inicial de `service_catalog` desde `docs/knowledge_base.md` y `docs/promos.md` cuando la tabla está vacía
-- Sincronización de `service_catalog` desde export CSV local de Fresha para evitar servicios o paquetes inventados
+- Panel admin `/admin` para administrar `service_catalog`
+- Sincronización de `service_catalog` desde export CSV local de Fresha; servicios, paquetes y promociones deben salir de esa tabla
 - Persistencia de `tenant_id` en historial, memoria, citas y eventos webhook
 - Runtime V2 en shadow mode para clasificar, decidir, planear respuesta y mezclar roles sin cambiar todavía la respuesta enviada
 - Comparación auditada V1/V2 en logs cuando Runtime V2 corre en shadow mode
@@ -58,7 +58,7 @@ app/
     policy_engine.py       decisión mínima antes del LLM
     prompt_builder.py      armado de mensajes y contexto para el LLM
     state.py               derivación pura de estado conversacional
-  knowledge_engine.py      system prompt + docs Markdown
+  knowledge_engine.py      system prompt + docs operativos sin catálogo de servicios
   business_rules.py        reglas determinísticas
   models.py                interacciones, memoria, citas, webhook events
   roles/blender.py         mezcla de roles frontdesk/manager/staff1
@@ -73,8 +73,6 @@ tenants/
   vanity/business.json     configuración versionada del tenant Vanity
 docs/
   system_prompt.md
-  knowledge_base.md
-  promos.md
   db.md
   evolution_api_latency_guide.md
 whatsapp_interactions/
@@ -167,7 +165,7 @@ Configuración:
 FRESHA_SERVICE_CSV_PATH=export_service_list_2026-05-11.csv
 ```
 
-Al iniciar, si el archivo existe, se hace upsert en `service_catalog` con fuente `fresha:csv`. También se puede ejecutar desde `/admin/ops` con `Sincronizar Fresha CSV`.
+Al iniciar, si el archivo existe, se hace upsert en `service_catalog` con fuente `fresha:csv`. También se puede ejecutar desde `/admin/ops` con `Sincronizar Fresha CSV`. Ya no se siembran servicios ni promociones desde Markdown.
 
 Columnas usadas del CSV:
 

@@ -8,6 +8,7 @@ class BookingFlowSettings:
     booking_url: str
     ios_app_store_url: str
     android_play_store_url: str
+    catalog_items: tuple["BookingItem", ...] = ()
 
 
 @dataclass(frozen=True)
@@ -353,7 +354,7 @@ def _booking_link_flow_reply(
 
 
 def _booking_link_reply_with_intro(summary: str, settings: BookingFlowSettings, intro: str) -> str:
-    items = _booking_items(summary)
+    items = _booking_items(summary, settings.catalog_items)
     services = "\n".join(f"- {item.name}: {item.minutes} min" for item in items)
     total_minutes = sum(item.minutes for item in items)
     return (
@@ -365,13 +366,17 @@ def _booking_link_reply_with_intro(summary: str, settings: BookingFlowSettings, 
     )
 
 
-def _booking_items(summary: str) -> list[BookingItem]:
+def _booking_items(summary: str, catalog_items: tuple[BookingItem, ...] = ()) -> list[BookingItem]:
     items: list[BookingItem] = []
     normalized_summary = normalize_text_for_matching(summary)
     for part in _summary_parts(summary):
         normalized = normalize_text_for_matching(part)
         if "retiro" in normalized:
             _append_unique_booking_item(items, BookingItem("Retiro de Gel/Acrílico", 20))
+            continue
+        catalog_item = _matching_catalog_item(normalized, catalog_items)
+        if catalog_item:
+            _append_unique_booking_item(items, catalog_item)
             continue
         if "gelish glow" in normalized or _is_gelish_hands_and_feet(normalized):
             _append_unique_booking_item(items, BookingItem(GELISH_GLOW_SERVICE_NAME, 95))
@@ -394,6 +399,16 @@ def _booking_items(summary: str) -> list[BookingItem]:
         items.append(BookingItem("Diseño/Nail Art", 20))
 
     return items or [BookingItem(summary or "Servicio", 60)]
+
+
+def _matching_catalog_item(normalized_part: str, catalog_items: tuple[BookingItem, ...]) -> BookingItem | None:
+    if not normalized_part:
+        return None
+    for item in catalog_items:
+        normalized_name = normalize_text_for_matching(item.name)
+        if normalized_part == normalized_name or normalized_part in normalized_name:
+            return item
+    return None
 
 
 def _append_unique_booking_item(items: list[BookingItem], item: BookingItem) -> None:

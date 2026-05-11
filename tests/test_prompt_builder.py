@@ -12,7 +12,7 @@ from app.conversation.prompt_builder import (
 )
 
 
-def test_build_user_content_includes_state_buffer_and_pricing_hint() -> None:
+def test_build_user_content_includes_state_buffer_without_hardcoded_pricing() -> None:
     payload = PromptPayload(
         message="Quiero uñas de acrílico #3 con retiro y nail art iconic",
         push_name="Marco",
@@ -25,8 +25,7 @@ def test_build_user_content_includes_state_buffer_and_pricing_hint() -> None:
     assert "Nombre WhatsApp: Marco" in content
     assert "Estado conversacional detectado: collecting_service" in content
     assert "nombre_detectado=Marco" in content
-    assert "Cotización determinística detectada" in content
-    assert "Retiro de Gel/Acrílico" in content
+    assert "Retiro de Gel/Acrílico" not in content
 
 
 def test_build_user_content_attaches_visual_reference_image() -> None:

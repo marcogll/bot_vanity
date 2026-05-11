@@ -1,4 +1,5 @@
 from app.conversation.booking_flow import (
+    BookingItem,
     BookingFlowSettings,
     booking_flow_reply,
     detect_app_registration_answer,
@@ -245,6 +246,28 @@ def test_booking_flow_sends_gelish_glow_booking_items_without_acrylics() -> None
     assert "- GELISH GLOW (gelish manos y pies): 95 min" in reply.text
     assert "- Uñas de acrílico" not in reply.text
     assert "Tiempo total estimado: 1 h 55 min" in reply.text
+
+
+def test_booking_flow_uses_catalog_item_for_selected_package() -> None:
+    settings = BookingFlowSettings(
+        booking_url="https://booking.example",
+        ios_app_store_url="https://apps.apple.com/fresha",
+        android_play_store_url="https://play.google.com/fresha",
+        catalog_items=(BookingItem("SPA GLAMOUR (gelish manos + pedicure spa)", 140),),
+    )
+    history = [
+        {
+            "role": "assistant",
+            "content": "Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - SPA GLAMOUR (gelish manos + pedicure spa).\n\nAntes de mandarte la liga para elegir horario, ¿ya tienes la app de Fresha y tu cuenta registrada?",
+        },
+    ]
+
+    reply = booking_flow_reply("Sí, ya la tengo", history, settings)
+
+    assert reply is not None
+    assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
+    assert "- SPA GLAMOUR (gelish manos + pedicure spa): 140 min" in reply.text
+    assert "Tiempo total estimado: 2 h 40 min" in reply.text
 
 
 def test_booking_flow_updates_booking_list_when_client_adds_pedicure() -> None:

@@ -7,7 +7,6 @@ from app.conversation.state import (
     is_visual_reference_request,
     looks_like_booking_or_payment_artifact,
 )
-from app.pricing import estimate_from_message
 from app.security import looks_like_prompt_injection
 
 
@@ -56,12 +55,6 @@ def build_user_content(
     conversation_state: str | None = None,
     conversation_buffer: ConversationBuffer | None = None,
 ) -> str | list[dict[str, Any]]:
-    estimate = estimate_from_message(payload.message)
-    estimate_hint = (
-        f"\n\nCotización determinística detectada desde knowledge_base.md:\n{estimate.to_prompt_hint()}"
-        if estimate
-        else ""
-    )
     manual_intervention_hint = (
         "\nIntervención manual reciente detectada: sí"
         if conversation_state == "handover_human"
@@ -80,7 +73,6 @@ def build_user_content(
         f"Mensaje: {payload.message}"
         f"{media_prompt_hint(payload)}"
         f"{media_safety_hint}"
-        f"{estimate_hint}"
     )
     image_data_url = image_media_data_url(payload)
     if not image_data_url or not should_attach_image_to_llm(payload):

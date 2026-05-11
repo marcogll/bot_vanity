@@ -14,7 +14,7 @@ from sqlalchemy import desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.catalog_sync import sync_service_catalog_from_docs, sync_service_catalog_from_fresha_csv
+from app.catalog_sync import sync_service_catalog_from_fresha_csv
 from app.database import AsyncSessionLocal, get_db_session
 from app.janitor import purge_expired_records
 from app.knowledge_engine import get_knowledge_engine
@@ -797,7 +797,6 @@ async def ops_page(request: Request, db: AsyncSession = Depends(get_db_session))
         {_action_form('/admin/actions/clear-rate-limit', 'Limpiar rate limit', _csrf_input(session_payload))}
         {_action_form('/admin/actions/clear-runtime', 'Limpiar runtime', _csrf_input(session_payload))}
         {_action_form('/admin/actions/run-janitor', 'Ejecutar janitor', _csrf_input(session_payload))}
-        {_action_form('/admin/actions/sync-service-catalog', 'Sincronizar servicios', _csrf_input(session_payload))}
         {_action_form('/admin/actions/sync-fresha-catalog', 'Sincronizar Fresha CSV', _csrf_input(session_payload))}
         {_action_form('/admin/actions/reload-docs', 'Recargar docs', _csrf_input(session_payload))}
       </div>
@@ -851,9 +850,6 @@ async def admin_action(action_name: str, request: Request, db: AsyncSession = De
     elif action_name == "reload-docs":
         get_knowledge_engine().reload()
         message = "Docs recargados."
-    elif action_name == "sync-service-catalog":
-        created, updated = await sync_service_catalog_from_docs(db, only_if_empty=False)
-        message = f"Catálogo sincronizado desde docs. Creados: {created}. Actualizados: {updated}."
     elif action_name == "sync-fresha-catalog":
         settings = get_settings()
         created, updated = await sync_service_catalog_from_fresha_csv(

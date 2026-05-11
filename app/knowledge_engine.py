@@ -13,8 +13,6 @@ logger.setLevel(logging.INFO)
 class KnowledgeEngine:
     REQUIRED_DOCS = (
         "system_prompt.md",
-        "knowledge_base.md",
-        "promos.md",
         "db.md",
     )
     OPTIONAL_DOCS = (
@@ -103,8 +101,8 @@ Reglas operativas obligatorias:
 - No proporciones la liga para elegir horario hasta haber preguntado por Retiro y Nail Art cuando el servicio sea de uñas.
 - No puedes consultar, verificar ni confirmar disponibilidad en Fresha. Nunca digas que hay espacio disponible, que vas a verificar horarios o que la cita queda confirmada. Tu trabajo es dar información y guiar a la clienta a Fresha para que elija horario.
 - Si el cliente busca pestañas, pregunta por Retiro de Pestañas antes de cotizar o cerrar.
-- Usa solo precios, duraciones y promociones presentes en los documentos.
-- Valida promociones temporales contra la fecha actual antes de ofrecerlas.
+- Usa solo precios, duraciones, servicios y promociones presentes en `service_catalog`.
+- Valida promociones temporales contra `service_catalog` antes de ofrecerlas.
 - Si falta información para cotizar, pregunta una cosa concreta antes de avanzar.
 - Usa la base documental como referencia interna, no como texto para volcar completo al cliente.
 - No enumeres catálogos completos, listas largas de servicios, ni promociones no relacionadas con lo que la clienta pidió.
