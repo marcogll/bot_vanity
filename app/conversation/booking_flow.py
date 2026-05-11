@@ -278,7 +278,7 @@ def _booking_link_reply(summary: str, settings: BookingFlowSettings) -> str:
     return (
         "Perfecto 💗 En Fresha busca estos servicios:\n"
         f"{services}\n\n"
-        f"Tiempo total estimado: {total_minutes} min.\n\n"
+        f"Tiempo total estimado: {_format_total_minutes(total_minutes)}.\n\n"
         f"Liga de booking: {settings.booking_url}\n\n"
         "Cuando termines, mándame captura de la confirmación para revisar tu cita."
     )
@@ -308,6 +308,15 @@ def _booking_items(summary: str) -> list[BookingItem]:
         items.append(BookingItem("Diseño/Nail Art", 20))
 
     return items or [BookingItem(summary or "Servicio", 60)]
+
+
+def _format_total_minutes(minutes: int) -> str:
+    hours, remaining_minutes = divmod(minutes, 60)
+    if hours and remaining_minutes:
+        return f"{hours} h {remaining_minutes} min"
+    if hours:
+        return f"{hours} h"
+    return f"{remaining_minutes} min"
 
 
 def _last_assistant_message(history: list[dict[str, str]]) -> str | None:

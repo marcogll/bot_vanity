@@ -164,7 +164,7 @@ def test_booking_flow_sends_booking_link_after_app_confirmation() -> None:
     assert reply.schedules_followup
     assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
     assert "- Polygel Extensions: 90 min" in reply.text
-    assert "Tiempo total estimado: 110 min" in reply.text
+    assert "Tiempo total estimado: 1 h 50 min" in reply.text
     assert "https://booking.example" in reply.text
 
 
@@ -185,7 +185,7 @@ def test_booking_flow_sends_booking_link_after_registration_ready() -> None:
 
     assert reply is not None
     assert "- Polygel Extensions: 90 min" in reply.text
-    assert "Tiempo total estimado: 90 min" in reply.text
+    assert "Tiempo total estimado: 1 h 30 min" in reply.text
     assert "https://booking.example" in reply.text
 
 
