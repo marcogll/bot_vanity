@@ -205,84 +205,122 @@ def _schedule_raw_webhook_processing(raw_body: bytes, request_path: str, setting
     task = asyncio.create_task(_process_raw_webhook_payload(raw_body, request_path, settings))
     app.state.webhook_tasks.add(task)
     task.add_done_callback(app.state.webhook_tasks.discard)
+    task.add_done_callback(_log_background_task_exception)
 
 
 async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, settings: Settings) -> None:
     try:
-        payload = EvolutionWebhookPayload.model_validate_json(raw_body)
-    except Exception:
-        logger.exception(
-            "Ignoring webhook with invalid payload: raw_body=%s",
-            raw_body.decode("utf-8", errors="replace")[:4000],
-        )
-        return
+        try:
+            payload = EvolutionWebhookPayload.model_validate_json(raw_body)
+        except Exception:
+            logger.exception(
+                "Ignoring webhook with invalid payload: raw_body=%s",
+                raw_body.decode("utf-8", errors="replace")[:4000],
+            )
+            return
 
-    if not _is_supported_message_event(payload, request_path):
-        logger.info("Ignored non-message event: event=%s path=%s", payload.event_name, request_path)
-        return
-    if payload.from_me:
-        if _is_test_mode_enabled(settings) and not _is_test_mode_allowed_number(payload.remote_jid, settings):
-            logger.info("Ignoring outbound webhook outside allowlist during test mode for %s", payload.remote_jid)
-            return
-        if _consume_recent_outbound_signature(payload.remote_jid, payload.message):
-            logger.warning("Ignoring self-sent outbound webhook for %s", payload.remote_jid)
-            return
-        logger.warning("Logging manual outbound webhook for %s", payload.remote_jid)
-        _schedule_outbound_logging(payload, settings)
-        return
-    if not payload.remote_jid or not payload.message.strip():
         logger.warning(
-            "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s normalized_payload=%s raw_body=%s",
-            payload.remote_jid,
-            payload.message_type,
-            payload.has_media,
-            payload.model_dump(),
-            raw_body.decode("utf-8", errors="replace")[:4000],
-        )
-        return
-    if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
-        logger.warning(
-            "Ignoring inbound webhook outside allowlist during test mode: remote_jid=%s sender=%s candidates=%s",
+            "Webhook parsed: event=%s path=%s remote_jid=%s sender=%s from_me=%s message_type=%s message_len=%s has_media=%s",
+            payload.event_name,
+            request_path,
             payload.remote_jid,
             payload.sender,
-            payload.reply_candidates,
+            payload.from_me,
+            payload.message_type,
+            len(payload.message.strip()),
+            payload.has_media,
         )
-        return
-    if rate_limiter is not None:
-        try:
-            rate_limiter.check(payload.remote_jid)
-        except HTTPException:
-            logger.warning("Rate limited webhook acknowledged without retry: remote_jid=%s", payload.remote_jid)
-            return
-    if _remember_inbound_webhook_seen(payload):
-        logger.warning(
-            "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
-            payload.remote_jid,
-            payload.session_id,
-        )
-        return
 
-    logger.warning(
-        "Accepted webhook: remote_jid=%s sender=%s instance=%s message_type=%s has_media=%s",
-        payload.remote_jid,
-        payload.sender,
-        payload.instance_name,
-        payload.message_type,
-        payload.has_media,
-    )
-    _schedule_webhook_processing(payload, settings)
+        if not _is_supported_message_event(payload, request_path):
+            logger.warning(
+                "Ignored non-message event: event=%s path=%s message_len=%s",
+                payload.event_name,
+                request_path,
+                len(payload.message.strip()),
+            )
+            return
+        if payload.from_me:
+            if _is_test_mode_enabled(settings) and not _is_test_mode_allowed_number(payload.remote_jid, settings):
+                logger.warning("Ignoring outbound webhook outside allowlist during test mode for %s", payload.remote_jid)
+                return
+            if _consume_recent_outbound_signature(payload.remote_jid, payload.message):
+                logger.warning("Ignoring self-sent outbound webhook for %s", payload.remote_jid)
+                return
+            logger.warning("Logging manual outbound webhook for %s", payload.remote_jid)
+            _schedule_outbound_logging(payload, settings)
+            return
+        if not payload.remote_jid or not payload.message.strip():
+            logger.warning(
+                "Ignoring webhook without readable inbound message: remote_jid=%r message_type=%r has_media=%s normalized_payload=%s raw_body=%s",
+                payload.remote_jid,
+                payload.message_type,
+                payload.has_media,
+                payload.model_dump(),
+                raw_body.decode("utf-8", errors="replace")[:4000],
+            )
+            return
+        if _is_test_mode_enabled(settings) and not _should_handle_in_test_mode(payload, settings):
+            logger.warning(
+                "Ignoring inbound webhook outside allowlist during test mode: remote_jid=%s sender=%s candidates=%s",
+                payload.remote_jid,
+                payload.sender,
+                payload.reply_candidates,
+            )
+            return
+        if rate_limiter is not None:
+            try:
+                rate_limiter.check(payload.remote_jid)
+            except HTTPException:
+                logger.warning("Rate limited webhook acknowledged without retry: remote_jid=%s", payload.remote_jid)
+                return
+        if _remember_inbound_webhook_seen(payload):
+            logger.warning(
+                "Ignoring duplicate webhook: remote_jid=%s session_id=%s",
+                payload.remote_jid,
+                payload.session_id,
+            )
+            return
+
+        logger.warning(
+            "Accepted webhook: remote_jid=%s sender=%s instance=%s message_type=%s has_media=%s",
+            payload.remote_jid,
+            payload.sender,
+            payload.instance_name,
+            payload.message_type,
+            payload.has_media,
+        )
+        _schedule_webhook_processing(payload, settings)
+    except Exception:
+        logger.exception("Raw webhook processing failed")
 
 
 def _schedule_webhook_processing(payload: EvolutionWebhookPayload, settings: Settings) -> None:
     task = asyncio.create_task(_process_webhook_payload(payload, settings))
     app.state.webhook_tasks.add(task)
     task.add_done_callback(app.state.webhook_tasks.discard)
+    task.add_done_callback(_log_background_task_exception)
 
 
 def _schedule_outbound_logging(payload: EvolutionWebhookPayload, settings: Settings) -> None:
     task = asyncio.create_task(_process_outbound_webhook(payload, settings))
     app.state.webhook_tasks.add(task)
     task.add_done_callback(app.state.webhook_tasks.discard)
+    task.add_done_callback(_log_background_task_exception)
+
+
+def _log_background_task_exception(task: asyncio.Task) -> None:
+    if task.cancelled():
+        return
+    try:
+        exception = task.exception()
+    except Exception:
+        logger.exception("Unable to read background task result")
+        return
+    if exception is not None:
+        logger.error(
+            "Background webhook task failed",
+            exc_info=(type(exception), exception, exception.__traceback__),
+        )
 
 
 async def _is_duplicate_webhook(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
