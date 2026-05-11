@@ -20,6 +20,7 @@ class EvolutionWebhookPayload(BaseModel):
     media_base64: str | None = Field(default=None, alias="mediaBase64")
     has_media: bool = Field(default=False, alias="hasMedia")
     session_id: str | None = Field(default=None, alias="sessionId")
+    message_timestamp: int | None = Field(default=None, alias="messageTimestamp")
     from_me: bool = Field(default=False, alias="fromMe")
 
     @model_validator(mode="before")
@@ -55,6 +56,7 @@ class EvolutionWebhookPayload(BaseModel):
                 "mediaBase64": media["base64"],
                 "hasMedia": media["has_media"],
                 "sessionId": top_level_key.get("id") or value.get("id"),
+                "messageTimestamp": coerce_message_timestamp(value.get("messageTimestamp")),
                 "fromMe": bool(top_level_key.get("fromMe", False)),
             }
 
@@ -86,8 +88,19 @@ class EvolutionWebhookPayload(BaseModel):
             "mediaBase64": media["base64"],
             "hasMedia": media["has_media"],
             "sessionId": key.get("id") or data.get("id"),
+            "messageTimestamp": coerce_message_timestamp(data.get("messageTimestamp") or value.get("messageTimestamp")),
             "fromMe": bool(key.get("fromMe", False)),
         }
+
+
+def coerce_message_timestamp(value: object) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return None
 
 
 def extract_message_text(message: object, data: dict[str, object] | None = None) -> str:

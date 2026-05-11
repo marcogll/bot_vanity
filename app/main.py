@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import re
+import time
 import unicodedata
 from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
@@ -234,7 +235,7 @@ async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, setti
             return
 
         logger.warning(
-            "Webhook parsed: event=%s path=%s remote_jid=%s sender=%s from_me=%s message_type=%s message_len=%s has_media=%s",
+            "Webhook parsed: event=%s path=%s remote_jid=%s sender=%s from_me=%s message_type=%s message_len=%s has_media=%s delivery_lag_seconds=%s",
             payload.event_name,
             request_path,
             payload.remote_jid,
@@ -243,6 +244,7 @@ async def _process_raw_webhook_payload(raw_body: bytes, request_path: str, setti
             payload.message_type,
             len(payload.message.strip()),
             payload.has_media,
+            _webhook_delivery_lag_seconds(payload),
         )
 
         if not _is_supported_message_event(payload, request_path):
@@ -354,6 +356,12 @@ def _remember_inbound_webhook_seen(payload: EvolutionWebhookPayload) -> bool:
     while len(processed) > MAX_PROCESSED_WEBHOOK_IDS:
         processed.popitem(last=False)
     return False
+
+
+def _webhook_delivery_lag_seconds(payload: EvolutionWebhookPayload) -> int | None:
+    if payload.message_timestamp is None:
+        return None
+    return max(0, int(datetime.now(UTC).timestamp()) - payload.message_timestamp)
 
 
 async def _claim_webhook_for_processing(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
@@ -613,6 +621,7 @@ async def _post_test_session_export(
 
 
 async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: Settings) -> None:
+    started = time.monotonic()
     if not await _claim_webhook_for_processing(payload, settings):
         logger.warning(
             "Skipping duplicate persisted webhook: remote_jid=%s session_id=%s",
@@ -626,6 +635,12 @@ async def _process_webhook_payload(payload: EvolutionWebhookPayload, settings: S
     async with AsyncSessionLocal() as db:
         try:
             await _handle_webhook_payload(payload, db, settings)
+            logger.warning(
+                "Webhook processing completed: remote_jid=%s session_id=%s elapsed_seconds=%.3f",
+                payload.remote_jid,
+                payload.session_id,
+                time.monotonic() - started,
+            )
         except Exception:
             logger.exception("Webhook processing failed for %s", payload.remote_jid)
 
