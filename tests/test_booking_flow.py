@@ -154,7 +154,7 @@ def test_booking_flow_sends_booking_link_after_app_confirmation() -> None:
     history = [
         {
             "role": "assistant",
-            "content": "Perfecto 💗 En Fresha vas a reservar: Polygel.\n\nAntes de mandarte la liga para elegir horario, ¿ya tienes la app de Fresha y tu cuenta registrada?",
+            "content": "Perfecto 💗 En Fresha vas a reservar: Retiro de Gel/Acrílico - Polygel.\n\nAntes de mandarte la liga para elegir horario, ¿ya tienes la app de Fresha y tu cuenta registrada?",
         },
     ]
 
@@ -162,8 +162,9 @@ def test_booking_flow_sends_booking_link_after_app_confirmation() -> None:
 
     assert reply is not None
     assert reply.schedules_followup
-    assert "Ahora sí" in reply.text
-    assert "vas a reservar: Polygel" in reply.text
+    assert "- Retiro de Gel/Acrílico: 20 min" in reply.text
+    assert "- Polygel Extensions: 90 min" in reply.text
+    assert "Tiempo total estimado: 110 min" in reply.text
     assert "https://booking.example" in reply.text
 
 
@@ -183,8 +184,26 @@ def test_booking_flow_sends_booking_link_after_registration_ready() -> None:
     reply = booking_flow_reply("Ya la tengo", history, _settings())
 
     assert reply is not None
-    assert "vas a reservar: Polygel" in reply.text
+    assert "- Polygel Extensions: 90 min" in reply.text
+    assert "Tiempo total estimado: 90 min" in reply.text
     assert "https://booking.example" in reply.text
+
+
+def test_booking_flow_asks_app_after_retiro_material_previo_phrase() -> None:
+    history = [
+        {"role": "user", "content": "Marco quiero polygel"},
+        {
+            "role": "assistant",
+            "content": "Perfecto, Marco. Para las extensiones de Polygel, ¿necesitas retiro de algún material previo, como gel o acrílico?",
+        },
+    ]
+
+    reply = booking_flow_reply("Si", history, _settings())
+
+    assert reply is not None
+    assert "vas a reservar: Retiro de Gel/Acrílico - Polygel" in reply.text
+    assert "ya tienes la app de Fresha" in reply.text
+    assert "https://booking.example" not in reply.text
 
 
 def test_detect_retiro_answer_distinguishes_yes_no() -> None:

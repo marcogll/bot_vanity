@@ -18,6 +18,12 @@ class BookingFlowReply:
     followup_message: str | None = None
 
 
+@dataclass(frozen=True)
+class BookingItem:
+    name: str
+    minutes: int
+
+
 def normalize_text_for_matching(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value.casefold())
     normalized = "".join(character for character in normalized if not unicodedata.combining(character))
@@ -26,7 +32,7 @@ def normalize_text_for_matching(value: str) -> str:
 
 def detect_service(message: str) -> str | None:
     normalized = message.casefold()
-    if any(word in normalized for word in ("uña", "unas", "manicure", "pedicure", "pedi", "gelish", "acrilic", "acrílic")):
+    if any(word in normalized for word in ("uña", "unas", "manicure", "pedicure", "pedi", "gelish", "acrilic", "acrílic", "polygel", "poly gel")):
         return "Uñas"
     if any(word in normalized for word in ("pestaña", "lash", "lifting")):
         return "Pestañas"
@@ -104,7 +110,7 @@ def booking_flow_reply(
                 )
             return None
         if _history_has_nail_booking_detail(history):
-            summary = _latest_booking_summary(history) or build_booking_summary("", history)
+            summary = _latest_booking_summary(history) or build_booking_summary(message if retiro is True else "", history)
             return BookingFlowReply(
                 _app_registration_question_reply(summary),
             )
@@ -128,7 +134,7 @@ def last_assistant_requested_retiro(history: list[dict[str, str]]) -> bool:
     normalized = normalize_text_for_matching(last)
     return (
         ("requiere retiro" in normalized or "requieres retiro" in normalized or "necesitas retiro" in normalized)
-        and "producto" in normalized
+        and ("producto" in normalized or "material" in normalized)
     )
 
 
@@ -266,11 +272,42 @@ def _app_registration_reply(settings: BookingFlowSettings) -> str:
 
 
 def _booking_link_reply(summary: str, settings: BookingFlowSettings) -> str:
+    items = _booking_items(summary)
+    services = "\n".join(f"- {item.name}: {item.minutes} min" for item in items)
+    total_minutes = sum(item.minutes for item in items)
     return (
-        f"Perfecto 💗 Ahora sí, en Fresha vas a reservar: {summary}.\n\n"
+        "Perfecto 💗 En Fresha busca estos servicios:\n"
+        f"{services}\n\n"
+        f"Tiempo total estimado: {total_minutes} min.\n\n"
         f"Liga de booking: {settings.booking_url}\n\n"
         "Cuando termines, mándame captura de la confirmación para revisar tu cita."
     )
+
+
+def _booking_items(summary: str) -> list[BookingItem]:
+    items: list[BookingItem] = []
+    normalized = normalize_text_for_matching(summary)
+    if "retiro" in normalized:
+        items.append(BookingItem("Retiro de Gel/Acrílico", 20))
+    if "polygel" in normalized:
+        items.append(BookingItem("Polygel Extensions", 90))
+    elif "soft gel" in normalized:
+        items.append(BookingItem("Soft Gel", 90))
+    elif "acrilic" in normalized or "acrilicas" in normalized:
+        items.append(BookingItem("Acrílicas", 90))
+    elif "gelish" in normalized:
+        items.append(BookingItem("Gelish", 60))
+    elif "pedicure" in normalized:
+        items.append(BookingItem("Pedicure", 60))
+    elif "manicure" in normalized:
+        items.append(BookingItem("Manicure", 45))
+
+    if "frances" in normalized or "french" in normalized:
+        items.append(BookingItem("Diseño French", 20))
+    elif "nail art" in normalized or "diseno" in normalized:
+        items.append(BookingItem("Diseño/Nail Art", 20))
+
+    return items or [BookingItem(summary or "Servicio", 60)]
 
 
 def _last_assistant_message(history: list[dict[str, str]]) -> str | None:

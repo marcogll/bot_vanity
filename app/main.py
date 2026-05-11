@@ -839,7 +839,7 @@ async def _handle_webhook_payload(
         logger.info("Reply sent: remote_jid=%s flow=initial_greeting", payload.remote_jid)
         return
 
-    name_only_reply = _name_only_followup_reply(payload.message, history)
+    name_only_reply = _name_and_service_followup_reply(payload.message, history) or _name_only_followup_reply(payload.message, history)
     if name_only_reply:
         _update_conversation_buffer_from_assistant_reply(conversation_buffer, "collecting_service", name_only_reply)
         await _persist_interaction(db, payload.remote_jid, payload.push_name, payload.message, name_only_reply, tenant_id=_tenant_id(settings))
@@ -1444,6 +1444,12 @@ def _name_and_service_followup_reply(message: str, history: list[Interaccion]) -
 
     name = _extract_leading_name(message)
     greeting = f"¡Gracias, {name.split()[0]}! " if name else "¡Perfecto! "
+    nail_subservice = detect_nail_subservice(message)
+    if nail_subservice:
+        return (
+            f"{greeting}Para {nail_subservice}, ¿necesitas retiro de algún material previo, "
+            "como gel, acrílico o polygel?"
+        )
     return _service_details_reply(service, greeting)
 
 

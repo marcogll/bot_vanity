@@ -1206,6 +1206,24 @@ def test_name_and_service_reply_after_initial_greeting_does_not_need_llm() -> No
     assert "combo manos y pies" in reply
 
 
+def test_name_and_specific_nail_service_asks_retiro_after_initial_greeting() -> None:
+    history = [
+        type(
+            "Interaction",
+            (),
+            {"role": MessageRole.assistant, "content": INITIAL_GREETING_REPLY},
+        )()
+    ]
+
+    reply = _name_and_service_followup_reply("Marco quiero polygel", history)
+
+    assert reply is not None
+    assert "Gracias, Marco" in reply
+    assert "Polygel" in reply
+    assert "retiro" in reply
+    assert "qué servicio buscas" not in reply
+
+
 def test_service_only_reply_after_service_question_does_not_need_llm() -> None:
     history = [
         type(
