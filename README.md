@@ -194,6 +194,8 @@ Genera una llave Fernet válida:
 
 El modo test permite probar Sofía solo con ciertos teléfonos, mientras el resto queda para recepción humana.
 
+Por seguridad operativa, el default del código es `TEST_MODE_ENABLED=true`. Para abrir Sofía a todos los clientes hay que configurar explícitamente `TEST_MODE_ENABLED=false`.
+
 Ejemplo:
 
 ```env

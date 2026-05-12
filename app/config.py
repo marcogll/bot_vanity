@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     rate_limit_window_seconds: int = 60
     follow_up_delay_seconds: int = 900
     janitor_interval_seconds: int = 86_400
-    test_mode_enabled: bool = False
+    test_mode_enabled: bool = True
     test_mode_allowed_numbers: str = ""
     test_mode_export_webhook_url: str = ""
     test_mode_export_webhook_auth_header: str = "Authorization"
