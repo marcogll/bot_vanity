@@ -123,6 +123,7 @@ MAX_PROCESSED_WEBHOOK_IDS = 1000
 MAX_RECENT_OUTBOUND_SIGNATURES = 500
 MAX_CONVERSATION_BUFFERS = 1000
 MANUAL_TEAM_INTERVENTION_MARKER = "[Intervención manual del equipo registrada]"
+SILENCE_REPLY_MARKER = "__sofia_silence_reply__"
 RECENT_BOT_ECHO_WINDOW_SECONDS = 300
 RECENT_DATABASE_DELETE_CONFIRMATION_SECONDS = 120
 DEFAULT_CONVERSATION_CONTEXT_HOURS = 24
@@ -991,9 +992,11 @@ async def _handle_webhook_payload(
         logger.info("Reply sent: remote_jid=%s flow=structured_booking", payload.remote_jid)
         return
 
-    response_text = _sanitize_assistant_reply_for_user(
-        await generate_assistant_reply(settings, payload, memory, history, pending, completed, conversation_buffer)
-    )
+    raw_response_text = await generate_assistant_reply(settings, payload, memory, history, pending, completed, conversation_buffer)
+    response_text = _sanitize_assistant_reply_for_user(raw_response_text)
+    if raw_response_text == SILENCE_REPLY_MARKER or not response_text.strip():
+        logger.warning("LLM fallback silenced to avoid repeated technical reply: remote_jid=%s", payload.remote_jid)
+        return
 
     _update_conversation_buffer_from_assistant_reply(conversation_buffer, conversation_state, response_text)
     db.add(Interaccion(payload.remote_jid, MessageRole.assistant, response_text, tenant_id=_tenant_id(settings)))
@@ -1056,11 +1059,15 @@ async def generate_assistant_reply(
         )
     except Exception:
         logger.exception("OpenAI response generation failed with model=%s", settings.llm_model)
+        if _recent_technical_fallback_sent(history):
+            return SILENCE_REPLY_MARKER
         return _technical_fallback_reply(payload, history)
 
     content = completion.choices[0].message.content
     if not content:
         logger.warning("OpenAI returned an empty response")
+        if _recent_technical_fallback_sent(history):
+            return SILENCE_REPLY_MARKER
         return _technical_fallback_reply(payload, history)
     return content.strip()
 
@@ -1646,6 +1653,20 @@ def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[In
         "Perdón, tuve un detalle técnico al procesar tu mensaje. "
         "¿Me compartes tu nombre para atenderte mejor? 💗"
     )
+
+
+def _recent_technical_fallback_sent(history: list[Interaccion]) -> bool:
+    recent_assistant_messages = [
+        item.content
+        for item in history[-6:]
+        if item.role == MessageRole.assistant
+    ]
+    return any(_is_technical_fallback_text(content) for content in recent_assistant_messages)
+
+
+def _is_technical_fallback_text(content: str) -> bool:
+    normalized = _normalize_text_for_matching(content)
+    return "detalle tecnico" in normalized and "procesar" in normalized
 
 
 def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | None:

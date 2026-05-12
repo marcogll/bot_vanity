@@ -22,6 +22,7 @@ from app.main import (
     _remember_recent_outbound_signature,
     _remember_recent_database_delete_confirmation,
     _recent_database_delete_confirmation_seen,
+    _recent_technical_fallback_sent,
     _remember_inbound_webhook_seen,
     _consume_recent_outbound_signature,
     _handle_structured_booking_flow,
@@ -1368,6 +1369,18 @@ def test_technical_fallback_does_not_offer_human_handover() -> None:
     assert "humana" not in reply
     assert "persona" not in reply
     assert "detalle técnico" in reply
+
+
+def test_recent_technical_fallback_is_detected_to_prevent_loops() -> None:
+    history = [
+        Interaccion(
+            "5218446686100@s.whatsapp.net",
+            MessageRole.assistant,
+            "Perdón, tuve un detalle técnico al procesar tu respuesta. ¿Me la puedes mandar de nuevo, por favor? 💗",
+        )
+    ]
+
+    assert _recent_technical_fallback_sent(history)
 
 
 def test_technical_fallback_uses_local_recovery_for_nail_options() -> None:
