@@ -2657,6 +2657,10 @@ def _pause_command_action(message: str) -> str | None:
         return "pause"
     if normalized in {"serac -r", "serac r", "serac resume", "serac restart", "serac reanudar"}:
         return "resume"
+    if normalized in {"serac shutdown", "serac apagar", "serac apagar bot"}:
+        return "shutdown"
+    if normalized in {"serac start", "serac iniciar", "serac start bot", "serac iniciar bot"}:
+        return "start"
     return None
 
 
@@ -2766,10 +2770,20 @@ async def _handle_pause_command(
     memory.push_name = payload.push_name or memory.push_name
     if action == "pause":
         memory.resumen_perfil = _mark_bot_paused(memory.resumen_perfil)
-        reply = "Bot pausado para este chat. Sofía dejará de responder hasta recibir `serac -r`."
-    else:
+        reply = "Bot pausado para este chat. Sofía continuará respondiendo en otros chats."
+    elif action == "resume":
         memory.resumen_perfil = _clear_bot_paused(memory.resumen_perfil)
         reply = "Bot reactivado para este chat. Sofía puede volver a responder."
+    elif action == "shutdown":
+        app.state.admin_runtime["bot_paused"] = True
+        memory.resumen_perfil = _mark_bot_paused(memory.resumen_perfil)
+        reply = "⚠️ Bot shutdown global ejecutado. Sofía ha dejado de responder a TODOS los usuarios. Para reactivarlo, envía `serac start` desde este número."
+    elif action == "start":
+        app.state.admin_runtime["bot_paused"] = False
+        memory.resumen_perfil = _clear_bot_paused(memory.resumen_perfil)
+        reply = "✅ Bot global reactivado. Sofía vuelve a responder a todos los usuarios."
+    else:
+        reply = "Comando desconocido."
     await _add_interaction_pair(db, payload.remote_jid, payload.message, reply, tenant_id=getattr(memory, "tenant_id", "vanity"))
     await db.commit()
     return reply

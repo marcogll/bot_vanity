@@ -44,6 +44,23 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Comparación auditada V1/V2 en logs cuando Runtime V2 corre en shadow mode
 - Flujo estructurado de booking antes del LLM para nombre, servicio, retiro, diseño/técnica, links de app y liga de booking
 - Escalación por WhatsApp a admins configurados cuando el usuario pide humano o hay queja
+- Control global del bot: `serac shutdown` para apagar, `serac start` para reanudar (solo admin)
+
+## Comandos Administrativos
+
+| Comando | Acción | Alcance |
+|---------|--------|---------|
+| `serac` | Pausar bot | Chat individual |
+| `serac -r` / `serac resume` | Reanudar bot | Chat individual |
+| `serac shutdown` | Apagar bot (global) | **Todos los usuarios** |
+| `serac start` | Reanudar bot (global) | **Todos los usuarios** |
+| `dipiridú` | Borrar memoria del chat | Chat individual |
+| `borrar toda la db` | Borrar toda la base de datos | **Sistema completo** |
+| `debug sender` | Info de diagnóstico del remitente | Chat individual |
+
+**Nota:** Solo los números registrados en `ADMIN_PHONE_NUMBERS` pueden ejecutar estos comandos.
+
+Ver [docs/manual_usuario.md](docs/manual_usuario.md) para documentación completa.
 
 ## Estructura
 
@@ -121,8 +138,8 @@ Variables críticas:
 Variables del panel admin:
 
 - `ADMIN_WEBUI_ENABLED=true`
-- `ADMIN_PHONE_NUMBER=528441026472`
-- `ADMIN_PHONE_NUMBERS=528441026472,528445047771`
+- `ADMIN_PHONE_NUMBER=<tu_numero>`
+- `ADMIN_PHONE_NUMBERS=<numero1>,<numero2>`
 - `ADMIN_BOOTSTRAP_USERNAME=admin`
 - `ADMIN_BOOTSTRAP_PASSWORD=<password fuerte temporal>`
 - `ADMIN_BOOTSTRAP_RESET_EXISTING=false`
@@ -200,7 +217,7 @@ Ejemplo:
 
 ```env
 TEST_MODE_ENABLED=true
-TEST_MODE_ALLOWED_NUMBERS=528448087770,528445949068,528441565066
+TEST_MODE_ALLOWED_NUMBERS=<numero1>,<numero2>,<numero3>
 TEST_MODE_EXPORT_WEBHOOK_URL=https://tu-endpoint.example.com/sofia-test-export
 TEST_MODE_EXPORT_WEBHOOK_AUTH_HEADER=token_sofia
 TEST_MODE_EXPORT_WEBHOOK_AUTH_VALUE=change-me
@@ -349,8 +366,8 @@ El buffer se usa para dar continuidad al prompt y a reglas locales, pero no reem
 El trigger administrativo se configura por env:
 
 ```env
-ADMIN_PHONE_NUMBER=528441026472
-ADMIN_PHONE_NUMBERS=528441026472,528445047771
+ADMIN_PHONE_NUMBER=<tu_numero>
+ADMIN_PHONE_NUMBERS=<numero1>,<numero2>
 MEMORY_DELETE_TRIGGER=dipiridú
 ```
 
@@ -364,7 +381,7 @@ Comportamiento actual:
 Si luego necesitas más de un admin, también existe:
 
 ```env
-ADMIN_PHONE_NUMBERS=528441026472,528445047771
+ADMIN_PHONE_NUMBERS=<numero1>,<numero2>
 ```
 
 ## Escalación Humana
@@ -449,7 +466,7 @@ curl -X POST "https://<dominio-evolution>/message/sendText/<instance_name>" \
   -H "apikey: <EVOLUTION_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "number": "528441026472",
+    "number": "<tu_numero>",
     "text": "Prueba CLI desde Evolution"
   }'
 ```
@@ -461,7 +478,7 @@ curl -X POST "https://ed3tlhtejal71x0be1zgjkkr.soul23.cloud/message/sendText/sof
   -H "apikey: <EVOLUTION_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "number": "528441026472",
+    "number": "<tu_numero>",
     "text": "Prueba CLI desde Evolution"
   }'
 ```
@@ -522,7 +539,7 @@ curl -X POST "${EVOLUTION_SERVER_URL}/message/sendText/${EVOLUTION_INSTANCE_NAME
   -H "apikey: ${EVOLUTION_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
-    "number": "528441026472",
+    "number": "<tu_numero>",
     "text": "Prueba CLI desde Evolution"
   }'
 ```
