@@ -10,6 +10,7 @@ from app.main import (
     MANUAL_TEAM_INTERVENTION_MARKER,
     MEMORY_DELETE_CONFIRMATION_REPLY,
     DATABASE_DELETE_CONFIRMATION_REPLY,
+    SILENCE_REPLY_MARKER,
     _build_test_session_export_payload,
     _build_user_content,
     _catalog_guided_booking_reply,
@@ -1368,7 +1369,8 @@ def test_technical_fallback_does_not_offer_human_handover() -> None:
 
     assert "humana" not in reply
     assert "persona" not in reply
-    assert "detalle técnico" in reply
+    assert "detalle técnico" not in reply
+    assert reply == SILENCE_REPLY_MARKER or "revisando tu mensaje" in reply or "mandar de nuevo" in reply
 
 
 def test_recent_technical_fallback_is_detected_to_prevent_loops() -> None:
@@ -1376,7 +1378,7 @@ def test_recent_technical_fallback_is_detected_to_prevent_loops() -> None:
         Interaccion(
             "5218446686100@s.whatsapp.net",
             MessageRole.assistant,
-            "Perdón, tuve un detalle técnico al procesar tu respuesta. ¿Me la puedes mandar de nuevo, por favor? 💗",
+            "Dame un momentito, estoy revisando tu mensaje. ¿Me lo puedes mandar de nuevo porfa? 💗",
         )
     ]
 

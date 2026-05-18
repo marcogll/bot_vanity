@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import io
 import json
 import logging
@@ -122,6 +123,8 @@ INITIAL_GREETING_REPLY = (
 MAX_PROCESSED_WEBHOOK_IDS = 1000
 MAX_RECENT_OUTBOUND_SIGNATURES = 500
 MAX_CONVERSATION_BUFFERS = 1000
+MAX_CONSECUTIVE_ERRORS = 2
+ERROR_COOLDOWN_SECONDS = 300
 MANUAL_TEAM_INTERVENTION_MARKER = "[Intervención manual del equipo registrada]"
 SILENCE_REPLY_MARKER = "__sofia_silence_reply__"
 RECENT_BOT_ECHO_WINDOW_SECONDS = 300
@@ -129,6 +132,27 @@ RECENT_DATABASE_DELETE_CONFIRMATION_SECONDS = 120
 DEFAULT_CONVERSATION_CONTEXT_HOURS = 24
 BOOKING_CONVERSATION_CONTEXT_HOURS = 48
 LOCAL_TIMEZONE = ZoneInfo("America/Monterrey")
+
+_error_tracker: OrderedDict[str, tuple[int, datetime]] = OrderedDict()
+
+
+def _is_in_error_cooldown(whatsapp_id: str) -> bool:
+    count, last_error = _error_tracker.get(whatsapp_id, (0, None))
+    if count >= MAX_CONSECUTIVE_ERRORS and last_error is not None:
+        if datetime.now(UTC) - last_error < timedelta(seconds=ERROR_COOLDOWN_SECONDS):
+            return True
+    return False
+
+
+def _record_error(whatsapp_id: str) -> None:
+    count, _ = _error_tracker.get(whatsapp_id, (0, None))
+    _error_tracker[whatsapp_id] = (count + 1, datetime.now(UTC))
+    while len(_error_tracker) > 500:
+        _error_tracker.popitem(last=False)
+
+
+def _record_success(whatsapp_id: str) -> None:
+    _error_tracker.pop(whatsapp_id, None)
 
 
 class WebhookResponse(BaseModel):
@@ -388,10 +412,16 @@ async def _claim_webhook_for_processing(payload: EvolutionWebhookPayload, settin
 
 
 def _webhook_dedupe_key(payload: EvolutionWebhookPayload) -> str | None:
-    if not payload.session_id:
-        return None
     instance = payload.instance_name or "default"
-    return f"{instance}:{payload.remote_jid}:{payload.session_id}"
+    if payload.session_id:
+        return f"{instance}:{payload.remote_jid}:{payload.session_id}"
+    if payload.message_timestamp and payload.message.strip():
+        minute_bucket = payload.message_timestamp // 60
+        content_hash = hashlib.md5(
+            f"{payload.remote_jid}:{payload.message.strip()}:{minute_bucket}".encode()
+        ).hexdigest()[:12]
+        return f"{instance}:{payload.remote_jid}:content:{content_hash}"
+    return None
 
 
 def _is_test_mode_enabled(settings: Settings) -> bool:
@@ -408,10 +438,16 @@ def _parse_test_mode_allowed_numbers(raw: str) -> set[str]:
 
 
 def _is_test_mode_allowed_number(whatsapp_id: str, settings: Settings) -> bool:
-    return _normalized_whatsapp_digits(whatsapp_id) in _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
+    allowed = _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
+    if not allowed:
+        return False
+    return _normalized_whatsapp_digits(whatsapp_id) in allowed
 
 
 def _should_handle_in_test_mode(payload: EvolutionWebhookPayload, settings: Settings) -> bool:
+    allowed_numbers = _parse_test_mode_allowed_numbers(settings.test_mode_allowed_numbers)
+    if not allowed_numbers:
+        return _is_authorized_admin(payload, settings)
     return _payload_matches_allowed_number(payload, settings.test_mode_allowed_numbers) or _is_authorized_admin(payload, settings)
 
 
@@ -1031,6 +1067,10 @@ async def generate_assistant_reply(
     completed: CitaCompletada | None,
     conversation_buffer: ConversationBuffer | None = None,
 ) -> str:
+    if _is_in_error_cooldown(payload.remote_jid):
+        logger.warning("Error cooldown active for %s, returning silence", payload.remote_jid)
+        return SILENCE_REPLY_MARKER
+
     client = AsyncOpenAI(api_key=settings.openai_api_key)
     memory_context = _active_memory_context(memory, history, pending, completed)
     system_prompt = get_knowledge_engine().build_system_prompt(
@@ -1050,26 +1090,40 @@ async def generate_assistant_reply(
         conversation_buffer=conversation_buffer,
     )
 
-    try:
-        completion = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=450,
-        )
-    except Exception:
-        logger.exception("OpenAI response generation failed with model=%s", settings.llm_model)
-        if _recent_technical_fallback_sent(history):
-            return SILENCE_REPLY_MARKER
-        return _technical_fallback_reply(payload, history)
+    for attempt in range(3):
+        try:
+            completion = await client.chat.completions.create(
+                model=settings.llm_model,
+                messages=messages,
+                temperature=0.4,
+                max_tokens=450,
+            )
+        except Exception as exc:
+            logger.warning(
+                "OpenAI response generation failed (attempt %d/3) with model=%s: %s",
+                attempt + 1,
+                settings.llm_model,
+                exc,
+            )
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+            continue
 
-    content = completion.choices[0].message.content
-    if not content:
-        logger.warning("OpenAI returned an empty response")
-        if _recent_technical_fallback_sent(history):
-            return SILENCE_REPLY_MARKER
-        return _technical_fallback_reply(payload, history)
-    return content.strip()
+        content = completion.choices[0].message.content
+        if not content:
+            logger.warning("OpenAI returned an empty response (attempt %d/3)", attempt + 1)
+            if attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+            continue
+
+        _record_success(payload.remote_jid)
+        return content.strip()
+
+    logger.exception("OpenAI response generation failed after 3 attempts with model=%s", settings.llm_model)
+    _record_error(payload.remote_jid)
+    if _recent_technical_fallback_sent(history):
+        return SILENCE_REPLY_MARKER
+    return _technical_fallback_reply(payload, history)
 
 
 async def _service_catalog_prompt_hint() -> str:
@@ -1636,23 +1690,10 @@ def _audio_filename_from_mimetype(mimetype: str | None) -> str:
 
 
 def _technical_fallback_reply(payload: EvolutionWebhookPayload, history: list[Interaccion]) -> str:
-    if payload.has_media:
-        return (
-            "Recibí tu archivo, pero tuve un detalle para leerlo en este momento. "
-            "¿Me confirmas por mensaje la sucursal, fecha y hora que aparecen en tu cita? 💗"
-        )
     recovery_reply = _local_recovery_reply(payload.message, history)
     if recovery_reply:
         return recovery_reply
-    if history and history[-1].role == MessageRole.assistant:
-        return (
-            "Perdón, tuve un detalle técnico al procesar tu respuesta. "
-            "¿Me la puedes mandar de nuevo, por favor? 💗"
-        )
-    return (
-        "Perdón, tuve un detalle técnico al procesar tu mensaje. "
-        "¿Me compartes tu nombre para atenderte mejor? 💗"
-    )
+    return SILENCE_REPLY_MARKER
 
 
 def _recent_technical_fallback_sent(history: list[Interaccion]) -> bool:
@@ -1666,7 +1707,12 @@ def _recent_technical_fallback_sent(history: list[Interaccion]) -> bool:
 
 def _is_technical_fallback_text(content: str) -> bool:
     normalized = _normalize_text_for_matching(content)
-    return "detalle tecnico" in normalized and "procesar" in normalized
+    return (
+        ("detalle tecnico" in normalized and "procesar" in normalized)
+        or ("revisando tu mensaje" in normalized and "mandar de nuevo" in normalized)
+        or ("ver la imagen con mas calma" in normalized)
+        or ("perdona la demora" in normalized and "confirmar de nuevo" in normalized)
+    )
 
 
 def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | None:
@@ -1676,6 +1722,8 @@ def _local_recovery_reply(message: str, history: list[Interaccion]) -> str | Non
         or _service_only_followup_reply(message, history)
         or _nail_subservice_followup_reply(message, history)
         or _nail_options_followup_reply(message, history)
+        or _booking_continuation_reply(message, history)
+        or _repeat_message_recovery_reply(message, history)
     )
 
 
@@ -1805,6 +1853,68 @@ def _nail_options_followup_reply(message: str, history: list[Interaccion]) -> st
         "Soft Gel: #1-#2 $500, #3-#4 $550\n\n"
         "Para recomendarte mejor, ¿buscas trabajar sobre tu uña natural o quieres extensión? 💗"
     )
+
+
+def _booking_continuation_reply(message: str, history: list[Interaccion]) -> str | None:
+    normalized = message.casefold()
+    if not _has_recent_booking_context(history):
+        return None
+    if any(phrase in normalized for phrase in ("que pasa", "qué pasa", "por que no", "por qué no", "no respondes", "no contesta")):
+        last_user_messages = [item.content for item in history[-6:] if item.role == MessageRole.user]
+        if last_user_messages:
+            return (
+                f"¡Hola! Perdona la demora 💗 Veo que me preguntaste sobre '{last_user_messages[-1][:60]}'. "
+                "¿Me lo puedes confirmar de nuevo? Estoy aquí para ayudarte."
+            )
+    if any(phrase in normalized for phrase in ("hola", "buenas", "buenos", "hey")):
+        last_assistant = _last_assistant_message_content(history)
+        if last_assistant and "liga de booking" in last_assistant.casefold():
+            return (
+                "¡Hola! 💗 ¿Pudiste elegir tu horario en la liga? "
+                "Si ya tienes tu cita, mándame captura para registrarla."
+            )
+        if last_assistant and "cita" in last_assistant.casefold():
+            return (
+                "¡Hola! 💗 ¿En qué te puedo ayudar con tu cita? "
+                "Si necesitas cambiar algo, dime y te ayudo."
+            )
+    return None
+
+
+def _repeat_message_recovery_reply(message: str, history: list[Interaccion]) -> str | None:
+    recent_user_messages = [item.content for item in history[-4:] if item.role == MessageRole.user]
+    if not recent_user_messages:
+        return None
+    last_user_message = recent_user_messages[-1]
+    if _normalize_text_for_matching(last_user_message) == _normalize_text_for_matching(message):
+        service = _detect_service(message)
+        if service:
+            return _service_details_reply(service, "¡Perfecto! ")
+        name = _extract_name_only(message) or _extract_leading_name(message)
+        if name:
+            first_name = name.split()[0]
+            return (
+                f"¡Gracias, {first_name}! Encantada de atenderte. 💗 "
+                "Cuéntame, ¿qué servicio buscas: uñas, pestañas o cejas?"
+            )
+    return None
+
+
+def _has_recent_booking_context(history: list[Interaccion]) -> bool:
+    settings = get_settings()
+    for item in reversed(history[-6:]):
+        if settings.booking_url in item.content:
+            return True
+        if any(phrase in item.content.casefold() for phrase in ("cita", "agendar", "reservar", "horario")):
+            return True
+    return False
+
+
+def _last_assistant_message_content(history: list[Interaccion]) -> str | None:
+    for item in reversed(history):
+        if item.role == MessageRole.assistant:
+            return item.content
+    return None
 
 
 def _has_recent_nail_context(message: str, history: list[Interaccion]) -> bool:
