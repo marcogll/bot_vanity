@@ -96,6 +96,7 @@ from app.janitor import janitor_loop
 from app.knowledge_engine import get_knowledge_engine
 from app.models import CitaCompletada, CitaPendiente, Interaccion, MessageRole, ServiceCatalog, SesionMemoria, WebhookEvent
 from app.rate_limit import InMemoryRateLimiter
+from app.reply import SILENCE_REPLY_MARKER, MANUAL_TEAM_INTERVENTION_MARKER
 from app.security import looks_like_prompt_injection, validate_webhook_api_key
 from app.tenants import TenantConfigError, load_tenant_config
 
@@ -125,8 +126,6 @@ MAX_RECENT_OUTBOUND_SIGNATURES = 500
 MAX_CONVERSATION_BUFFERS = 1000
 MAX_CONSECUTIVE_ERRORS = 2
 ERROR_COOLDOWN_SECONDS = 300
-MANUAL_TEAM_INTERVENTION_MARKER = "[Intervención manual del equipo registrada]"
-SILENCE_REPLY_MARKER = "__sofia_silence_reply__"
 RECENT_BOT_ECHO_WINDOW_SECONDS = 300
 RECENT_DATABASE_DELETE_CONFIRMATION_SECONDS = 120
 DEFAULT_CONVERSATION_CONTEXT_HOURS = 24
