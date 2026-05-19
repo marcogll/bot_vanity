@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-05-18
+
+### Refactor Sofia Role Runtime - Fases 5-10 Completadas
+
+#### Fase 5: Prompt Modular
+- Documentos de conocimiento divididos por tenant en `tenants/vanity/knowledge/`
+  - `identity.md`, `policies.md`, `booking_flow.md`, `roles.md`, `escalation.md`
+- `TenantKnowledgeEngine` en `app/knowledge/engine.py`
+  - Carga conocimiento por tenant con placeholders dinámicos
+  - Reemplaza URLs, nombres, políticas y configuración en tiempo de ejecución
+- PromptBuilder con contrato system = identidad + políticas + roles
+
+#### Fase 6: Multi-Negocio
+- `BotRegistry` en `app/bots/registry.py`
+  - Resuelve tenant por ID, instancia o número de teléfono
+  - Cachea configuraciones para evitar recargas
+  - Expone perfil de bot para uso en runtime
+- `tenant_id` formalmente introducido en todo el sistema
+- Canal WhatsApp completamente separado en `app/channels/whatsapp.py`
+
+#### Fase 7: Capacidades y Herramientas
+- Tool layer en `app/tools/layer.py`
+  - `ToolAction` enum con 8 acciones permitidas
+  - Tools implementados: SendBookingLink, RequestMissingDetail, QuoteService, PauseBot, NotifyHuman, ScheduleFollowup
+  - Cada tool tiene precondiciones, ejecución, resultado estructurado y mensaje sugerido
+- Límites de autoridad definidos en `BusinessPolicyPack.bot_authority_limits`
+
+#### Fase 8: Refactor Incremental
+- `app/main.py` reducido con módulos extraídos:
+  - `app/admin/commands.py` - Comandos administrativos (memory/db delete, pause, shutdown)
+  - `app/reply/formatter.py` - Formateo y sanitización de respuestas
+  - `app/tools/test_export.py` - Exportación de sesiones de test
+  - `app/tools/transcription.py` - Transcripción de audio
+  - `app/conversation/history.py` - Helpers de historial y contexto
+  - `app/channels/webhook_processor.py` - Procesamiento de webhooks
+
+#### Fase 9: Testing
+- 82 nuevos tests de integración y migración
+- `tests/test_role_runtime_integration.py` - Tests de roles y runtime (20 tests)
+- `tests/test_multi_tenant.py` - Tests de aislamiento multi-tenant (7 tests)
+- `tests/test_authority_limits.py` - Tests de límites de autoridad (16 tests)
+- `tests/test_real_chat_scenarios.py` - Escenarios de chat reales (21 tests)
+- `tests/test_migration_validation.py` - Tests de validación de migración (15 tests)
+- Suite completa: 343 tests passing
+
+#### Fase 10: Migración Operativa
+- Tenant vanity completamente configurado con políticas y conocimiento
+- Sistema de flags implementado:
+  - `BOT_RUNTIME_V2_ENABLED` - Control principal de V2
+  - `BOT_RUNTIME_V2_SHADOW_MODE` - Shadow mode para evaluación sin responder
+  - `BOT_RUNTIME_V2_ALLOWED_NUMBERS` - Allowlist para activación controlada
+  - `ROLE_BLEND_ENABLED` - Control de mezcla de roles
+- Comparación V1 vs V2 implementada con `compare_runtime_to_reply()`
+- Script de validación en `scripts/validate_migration.py`
+- Guía de migración operativa en `docs/migration_guide.md`
+
+#### Documentación
+- `docs/migration_guide.md` - Guía completa de migración operativa
+- `docs/rule_classification_matrix.md` - Matriz de clasificación de reglas (33 reglas en 5 categorías)
+- `docs/refactor_status.md` - Estado actualizado del refactor
+- `docs/sofia_role_runtime_refactor_plan.md` - Plan maestro actualizado
+- `README.md` - Estructura y estado actualizados
+- `CHANGELOG.md` - Este archivo
+
+### Validación
+
+- Suite completa: `343 passed, 4 warnings`
+
 ## 2026-05-09
 
 ### Refactor Sofia Role Runtime

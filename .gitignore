@@ -18,3 +18,23 @@ whatsapp_interactions/*
 # Local Docker runtime artifacts
 .docker/
 docker-data/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CodeGraph index
+.codegraph/
+
+# Openencode session files
+.git/opencode
+
+# Backup branches (keep locally but not in remote)
+# Note: backup/* branches should be managed manually

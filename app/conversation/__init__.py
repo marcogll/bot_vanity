@@ -1,3 +1,4 @@
+from app.conversation.classifier import ConversationClassifier
 from app.conversation.models import (
     AssistantDecision,
     BusinessAction,
@@ -28,6 +29,7 @@ from app.conversation.prompt_builder import (
     sanitize_history_content_for_model,
     should_attach_image_to_llm,
 )
+from app.conversation.response_planner import ResponsePlanner
 from app.conversation.state import (
     PendingBookingState,
     StateMessage,
@@ -42,9 +44,10 @@ from app.conversation.state import (
 __all__ = [
     "AssistantDecision",
     "BusinessAction",
-    "ConversationClassifierResult",
     "ConversationBuffer",
     "ConversationBufferStore",
+    "ConversationClassifier",
+    "ConversationClassifierResult",
     "ConversationContext",
     "ConversationState",
     "CustomerProfile",
@@ -55,6 +58,7 @@ __all__ = [
     "PromptHistoryItem",
     "PromptPayload",
     "ResponsePlan",
+    "ResponsePlanner",
     "StateMessage",
     "StatePayload",
     "build_prompt_messages",

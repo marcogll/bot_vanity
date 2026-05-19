@@ -115,5 +115,55 @@
       "manager": 0.4,
       "staff1": 0.4
     }
+  },
+  "policies": {
+    "booking": {
+      "provider": "fresha",
+      "deposit_required": false,
+      "follow_up_delay_seconds": 900,
+      "ask_for_retiro": true,
+      "ask_for_app_registration": true
+    },
+    "escalation": {
+      "human_handover_markers": [
+        "hablar con un humano",
+        "hablar con una persona",
+        "hablar con alguien",
+        "quiero un humano",
+        "quiero una persona",
+        "pásame con asesora",
+        "pasame con asesora",
+        "gerente"
+      ],
+      "complaint_markers": [
+        "queja",
+        "molesta",
+        "molesto",
+        "enojada",
+        "enojado",
+        "pésimo",
+        "pesimo",
+        "mal servicio"
+      ],
+      "admin_phone_numbers": []
+    },
+    "style": {
+      "tone": "calido_breve_premium",
+      "max_message_length": 400,
+      "one_question_at_a_time": true,
+      "emoji_style": "discreto",
+      "greeting_template": ""
+    },
+    "when_to_quote": "always_from_catalog",
+    "when_to_escalate": "complaint_or_handover_request",
+    "when_to_silence": "human_intervention_recent",
+    "when_to_send_booking": "after_service_details_collected",
+    "bot_authority_limits": [
+      "no_confirmar_disponibilidad_sin_tool",
+      "no_mover_citas_manualmente",
+      "no_prometer_excepciones",
+      "no_contradecir_humano_reciente"
+    ],
+    "promotion_validation": "check_date_range_in_catalog"
   }
 }

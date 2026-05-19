@@ -18,7 +18,7 @@ class PolicyEngine:
                 reason="bot_paused",
             )
 
-        if context.human_intervention_recent or context.state == ConversationState.HANDOVER_HUMAN:
+        if context.human_intervention_recent:
             return AssistantDecision(
                 action=DecisionAction.SILENCE,
                 reason="human_intervention_recent",
@@ -39,7 +39,7 @@ class PolicyEngine:
 
         if (
             context.detected_intent in {DetectedIntent.HUMAN_HANDOVER, DetectedIntent.COMPLAINT}
-            or context.state == ConversationState.COMPLAINT
+            or context.state in {ConversationState.COMPLAINT, ConversationState.HANDOVER_HUMAN}
             or needs_human_handover(context.current_message)
         ):
             return AssistantDecision(

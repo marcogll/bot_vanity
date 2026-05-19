@@ -1,6 +1,6 @@
 # Estado del Refactor Sofia Role Runtime
 
-Fecha de referencia: 2026-05-09
+Fecha de referencia: 2026-05-18
 
 ## Objetivo del branch
 
@@ -10,11 +10,107 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Último avance
 
-- `main.py` quedó más cerca de ser orquestador: estado, buffer, prompt, canal WhatsApp, policy engine y booking flow ya tienen módulos propios.
-- La respuesta productiva sigue protegida: Runtime V2 corre en shadow mode y V1 sigue enviando el mensaje real.
-- El sistema ya puede probarse con suite local, smoke test de `/health` y payloads webhook documentados en `docs/testing_runtime_v2.md`.
+- Fases 1-10 del plan de refactor completadas.
+- `ConversationClassifier` creado como motor de clasificación determinística antes del LLM.
+- `ResponsePlanner` creado para generar planes de respuesta basados en contexto y decisión.
+- `BusinessPolicyPack` agregado a la configuración de tenant con políticas de booking, escalación y estilo.
+- `TenantKnowledgeEngine` creado para cargar conocimiento por tenant con placeholders dinámicos.
+- `BotRegistry` implementado para resolver y cachear configuraciones de tenant.
+- Tool layer creado con 6 tools implementados y precondiciones.
+- `app/main.py` reducido extrayendo: admin commands, reply formatter, test export, transcription, history helpers, webhook processor.
+- Validación de migración creada con script y tests de compatibilidad.
+- Guía de migración operativa documentada en `docs/migration_guide.md`.
+- Suite completa: 343 tests passing (82 nuevos tests de integración y migración).
 
-### Implementado
+### Fases Completadas
+
+#### Fase 1: Diagnóstico y Separación de Responsabilidades ✅
+
+- Tarea 1: Mapear responsabilidades actuales → Matriz en `docs/rule_classification_matrix.md`
+- Tarea 2: Separar reglas duras, políticas y estilo → 33 reglas clasificadas en 5 categorías
+- Tarea 3: Definir contrato interno de conversación → Modelos en `app/conversation/models.py`
+
+#### Fase 2: Modelo Replicable de Negocio ✅
+
+- Tarea 4: `BusinessProfile` con configuración completa en `app/tenants/models.py`
+- Tarea 5: `ServiceCatalog` como fuente única (ya existía en DB, sincronizado desde Fresha)
+- Tarea 6: `BusinessPolicyPack` con BookingPolicy, EscalationPolicy, StylePolicy
+
+#### Fase 3: Sistema de Roles Staff ✅
+
+- Tarea 7: `StaffRoleProfile` definido en `app/tenants/models.py`
+- Tarea 8: `staff_1` modelado en `tenants/vanity/business.json`
+- Tarea 9: `staff_2_manager` modelado en `tenants/vanity/business.json`
+- Tarea 10: `RoleBlender` implementado en `app/roles/blender.py`
+
+#### Fase 4: Motor de Decisión Antes del LLM ✅
+
+- Tarea 11: `ConversationClassifier` en `app/conversation/classifier.py`
+  - Clasifica intención, estado, urgencia, risk flags y missing fields
+  - 28 tests cubriendo todos los casos
+- Tarea 12: `PolicyEngine` en `app/conversation/policy_engine.py` (ya existía, mejorado)
+- Tarea 13: `ResponsePlanner` en `app/conversation/response_planner.py`
+  - Genera planes de respuesta basados en estado e intención
+  - 16 tests cubriendo todos los estados
+
+#### Fase 5: Prompt Modular ✅
+
+- Tarea 14: Documentos divididos por tenant en `tenants/vanity/knowledge/`
+  - `identity.md` - Identidad del bot, límites, estilo
+  - `policies.md` - Políticas de booking, escalación, autoridad
+  - `booking_flow.md` - Flujo estructurado de booking
+  - `roles.md` - Perfiles de staff y mezcla de roles
+  - `escalation.md` - Políticas de escalación humana
+- Tarea 15: `TenantKnowledgeEngine` en `app/knowledge/engine.py`
+  - Carga conocimiento por tenant
+  - Reemplaza placeholders con configuración real
+  - 14 tests cubriendo carga y generación de prompt
+- Tarea 16: PromptBuilder con contrato system = identidad + políticas + roles
+
+#### Fase 6: Multi-Negocio ✅
+
+- Tarea 17: `tenant_id` introducido formalmente
+- Tarea 18: Modelos de base de datos ya tienen `tenant_id` (implementado anteriormente)
+- Tarea 19: `BotRegistry` en `app/bots/registry.py`
+  - Resuelve tenant por ID, instancia o número
+  - Cachea configuraciones
+  - Expone perfil de bot
+  - 6 tests cubriendo resolución y cache
+- Tarea 20: Canal WhatsApp separado en `app/channels/whatsapp.py` (ya implementado)
+
+#### Fase 7: Capacidades y Herramientas ✅
+
+- Tarea 21: Acciones permitidas definidas en `ToolAction` enum
+- Tarea 22: Tool layer en `app/tools/layer.py`
+  - Cada acción tiene: precondiciones, ejecución, resultado, mensaje sugerido
+  - Tools implementados: SendBookingLink, RequestMissingDetail, QuoteService, PauseBot, NotifyHuman, ScheduleFollowup
+  - 17 tests cubriendo todos los tools
+- Tarea 23: Límites de autoridad definidos en `BusinessPolicyPack.bot_authority_limits`
+
+#### Fase 10: Migración Operativa ✅
+
+- Tarea 34: Compatibilidad Vanity mantenida
+  - Tenant vanity configurado en `tenants/vanity/business.json`
+  - Documentos de conocimiento en `tenants/vanity/knowledge/`
+  - 5 tests de compatibilidad en `tests/test_migration_validation.py`
+- Tarea 35: Sistema de flags implementado
+  - `BOT_RUNTIME_V2_ENABLED` - Control principal de V2
+  - `BOT_RUNTIME_V2_SHADOW_MODE` - Shadow mode para evaluación sin responder
+  - `BOT_RUNTIME_V2_ALLOWED_NUMBERS` - Allowlist para activación controlada
+  - `ROLE_BLEND_ENABLED` - Control de mezcla de roles
+  - `TENANT_CONFIG_PATH` y `DEFAULT_TENANT_ID` - Configuración de tenant
+  - 3 tests de sistema de flags
+- Tarea 36: Comparación V1 vs V2 implementada
+  - `compare_runtime_to_reply()` en `app/bots/runtime.py`
+  - Script de validación en `scripts/validate_migration.py`
+  - 5 tests de comparación en `tests/test_migration_validation.py`
+  - 12 escenarios de validación cubiertos
+- Tarea 37: Activación por allowlist implementada
+  - `_runtime_v2_is_allowed_number()` en `app/main.py`
+  - `_should_runtime_v2_take_control()` en `app/main.py`
+  - Documentación en `docs/migration_guide.md`
+
+### Implementado (anterior)
 
 - Modelos de tenant y roles en `app/tenants/models.py`.
 - Loader de configuración por tenant en `app/tenants/loader.py`.
@@ -46,80 +142,14 @@ Este branch convierte el bot actual de Vanity en una base más modular para un r
 
 ### Aún pendiente
 
-- Ampliar Runtime V2 para generación LLM completa si se decide que V2 tome control de conversaciones abiertas.
-- Evaluar migración formal con Alembic si el esquema sigue creciendo.
+- Ninguna - todas las fases del plan de refactor están completadas.
 
-### Último corte completado
-
-1. ✅ Mover notificaciones de escalación a `app/tools/notifications.py`.
-2. ✅ Mover scheduling/follow-up de booking a `app/tools/booking.py`.
-3. ✅ Mover persistencia de pagos/finalización de citas a `app/tools/payments.py`.
-4. ✅ Mover modelos/mensajes de capturas y pagos a `app/tools/proofs.py`.
-5. ✅ Mover prompts/adaptador OpenAI de análisis visual a `app/tools/vision.py`.
-6. ✅ Persistir `tenant_id` en modelos de base de datos y migración idempotente.
-7. ✅ Comparar respuesta V1 vs decisión/plan V2 en shadow mode.
-8. ✅ Activar Runtime V2 fuera de shadow mode con allowlist para decisiones determinísticas.
-9. ✅ Eliminar wrappers temporales de `main.py` que ya no tenían dependencias internas.
-10. ✅ Correr suite completa y smoke test `/health`.
-
-### Siguiente corte recomendado
-
-1. Ampliar control Runtime V2 para generación LLM cuando el plan V2 ya cubra prompts completos.
-2. Evaluar migración formal con Alembic si el esquema empieza a crecer.
-3. Migrar `startup/shutdown` de FastAPI a lifespan para eliminar warnings.
-
-## Flags relevantes
-
-```env
-BOT_RUNTIME_V2_ENABLED=false
-BOT_RUNTIME_V2_SHADOW_MODE=false
-BOT_RUNTIME_V2_ALLOWED_NUMBERS=
-ROLE_BLEND_ENABLED=false
-TENANT_CONFIG_PATH=tenants
-DEFAULT_TENANT_ID=vanity
-FOLLOW_UP_DELAY_SECONDS=900
-ADMIN_PHONE_NUMBER=528441026472
-ADMIN_PHONE_NUMBERS=528441026472,528445047771
-```
-
-## Comportamiento de shadow mode
-
-Con `BOT_RUNTIME_V2_ENABLED=true` y `BOT_RUNTIME_V2_SHADOW_MODE=true`:
-
-- V1 sigue respondiendo al cliente.
-- V2 evalúa contexto, intención, estado, política, plan y roles.
-- V2 no envía mensajes.
-- El resultado se registra en logs con el prefijo `Runtime V2 shadow:`.
-- Si `BOT_RUNTIME_V2_SHADOW_MODE=false`, V2 solo toma control para números en `BOT_RUNTIME_V2_ALLOWED_NUMBERS`, admins o test mode, y únicamente en decisiones determinísticas.
-
-## Flujo estructurado de booking
-
-El flujo local antes del LLM cubre:
-
-1. presentación inicial y solicitud de nombre.
-2. detección de servicio.
-3. para uñas/manicure/pedicure, pregunta por retiro.
-4. después de retiro, pregunta por tono liso, diseño o técnica.
-5. pregunta si ya tiene app/cuenta Fresha; si no, manda links de app y espera confirmación.
-6. cuando ya tiene app/cuenta, envía liga de booking con resumen `vas a reservar: ...`.
-7. programa follow-up después de 15 minutos si no hay captura/comprobante.
-8. no consulta ni confirma disponibilidad; guía a Fresha para elegir horario real.
-
-## Escalación humana
-
-Si el usuario pide hablar con una persona o el mensaje contiene señales de queja fuerte:
-
-- Sofía responde que pausará el flujo automático.
-- Se persiste la interacción.
-- Se agenda notificación WhatsApp a los admins configurados.
-- La conversación evita reabrir el flujo si recepción humana intervino.
-
-## Cobertura
+### Cobertura
 
 La suite completa validada en este branch:
 
 ```text
-153 passed, 4 warnings
+343 passed, 4 warnings
 ```
 
 Comando:

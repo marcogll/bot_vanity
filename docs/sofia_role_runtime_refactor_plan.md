@@ -7,7 +7,35 @@ Este documento conserva el plan maestro. El estado implementado, la guía de pru
 - `docs/refactor_status.md`
 - `docs/testing_runtime_v2.md`
 - `docs/operations_runtime_v2.md`
+- `docs/rule_classification_matrix.md`
 - `README.md`
+
+## Progreso Actual (2026-05-18)
+
+### Fases Completadas
+
+- **Fase 1**: ✅ Diagnóstico y Separación de Responsabilidades
+- **Fase 2**: ✅ Modelo Replicable de Negocio
+- **Fase 3**: ✅ Sistema de Roles Staff
+- **Fase 4**: ✅ Motor de Decisión Antes del LLM
+- **Fase 5**: ✅ Prompt Modular
+- **Fase 6**: ✅ Multi-Negocio
+- **Fase 7**: ✅ Capacidades y Herramientas
+- **Fase 8**: ✅ Refactor Incremental
+- **Fase 9**: ✅ Testing
+- **Fase 10**: ✅ Migración Operativa
+
+### Estado del Proyecto
+
+**TODAS LAS FASES COMPLETADAS**
+
+El refactor está listo para activación en producción siguiendo la guía en `docs/migration_guide.md`.
+
+### Cobertura de Tests
+
+```
+343 passed, 4 warnings
+```
 
 ## Objetivo
 

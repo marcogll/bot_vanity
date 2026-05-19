@@ -30,6 +30,13 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 
 ## Estado actual
 
+- Runtime V2 completamente implementado con clasificación, decisión, planificación y mezcla de roles
+- Sistema multi-tenant con configuración por negocio en `tenants/`
+- Motor de clasificación determinística antes del LLM (`ConversationClassifier`)
+- Motor de políticas (`PolicyEngine`) y planificación de respuestas (`ResponsePlanner`)
+- Tool layer con acciones validadas y precondiciones
+- Conocimiento modular por tenant en `tenants/vanity/knowledge/`
+- BotRegistry para resolución y cache de configuraciones de tenant
 - Deduplicación de webhooks por `instance + remote_jid + session_id`
 - Transcripción de audio antes del flujo principal
 - Análisis estructurado de capturas de cita y comprobantes
@@ -38,13 +45,13 @@ El comportamiento actual ya incorpora aprendizaje de chats reales en [whatsapp_i
 - Sanitización final para impedir fuga de texto interno
 - Modo test con allowlist, export JSON y purge automático por sesión
 - Panel admin `/admin` para administrar `service_catalog`
-- Sincronización de `service_catalog` desde export CSV local de Fresha; servicios, paquetes y promociones deben salir de esa tabla
+- Sincronización de `service_catalog` desde export CSV local de Fresha
 - Persistencia de `tenant_id` en historial, memoria, citas y eventos webhook
-- Runtime V2 en shadow mode para clasificar, decidir, planear respuesta y mezclar roles sin cambiar todavía la respuesta enviada
 - Comparación auditada V1/V2 en logs cuando Runtime V2 corre en shadow mode
-- Flujo estructurado de booking antes del LLM para nombre, servicio, retiro, diseño/técnica, links de app y liga de booking
-- Escalación por WhatsApp a admins configurados cuando el usuario pide humano o hay queja
-- Control global del bot: `serac shutdown` para apagar, `serac start` para reanudar (solo admin)
+- Flujo estructurado de booking antes del LLM
+- Escalación por WhatsApp a admins configurados
+- Control global del bot: `serac shutdown` / `serac start`
+- Suite completa: 343 tests passing
 
 ## Comandos Administrativos
 
@@ -67,36 +74,76 @@ Ver [docs/manual_usuario.md](docs/manual_usuario.md) para documentación complet
 ```text
 app/
   main.py                  webhook, orquestación, DB/LLM y modo test
-  bots/runtime.py          Runtime V2 en shadow mode
-  channels/whatsapp.py     payload y parsing de Evolution/WhatsApp
+  config.py                configuración de entorno con pydantic-settings
+  bots/
+    runtime.py             Runtime V2 con evaluación y comparación V1/V2
+    registry.py            BotRegistry para resolución de tenants
+  channels/
+    whatsapp.py            payload y parsing de Evolution/WhatsApp
+    webhook_processor.py   procesamiento de webhooks (dedup, rate limit)
   conversation/
     booking_flow.py        flujo local de booking antes del LLM
+    classifier.py          clasificación determinística de intención/estado
+    history.py             helpers de historial y contexto conversacional
     memory.py              buffer conversacional temporal
-    policy_engine.py       decisión mínima antes del LLM
+    models.py              contratos de conversación (estado, intención, decisión)
+    policy_engine.py       motor de políticas y decisiones
     prompt_builder.py      armado de mensajes y contexto para el LLM
+    response_planner.py    planificación de respuestas por estado
     state.py               derivación pura de estado conversacional
-  knowledge_engine.py      system prompt + docs operativos sin catálogo de servicios
-  business_rules.py        reglas determinísticas
+  knowledge/
+    engine.py              TenantKnowledgeEngine para prompts modulares
+  knowledge_engine.py      system prompt legacy (fallback)
+  business_rules.py        reglas determinísticas de escalación
   models.py                interacciones, memoria, citas, webhook events
-  roles/blender.py         mezcla de roles frontdesk/manager/staff1
-  tenants/                 modelos y loader de tenants
+  reply/
+    constants.py           marcadores de silencio e intervención
+    fallback.py            respuestas de fallback técnico
+    formatter.py           formateo y sanitización de respuestas
+    recovery.py            recuperación de contexto
+    sanitizer.py           sanitización de respuestas
+  roles/
+    blender.py             mezcla de roles frontdesk/manager/staff1
+  tenants/
+    models.py              modelos de tenant, negocio, bot, roles, políticas
+    loader.py              loader de configuración por tenant
   tools/
     booking.py             follow-up y reglas operativas de booking
+    layer.py               tool layer con acciones y precondiciones
     notifications.py       notificaciones de handover/escalación
     payments.py            persistencia de pagos y finalización de citas
     proofs.py              modelos y mensajes de capturas/comprobantes
+    test_export.py         exportación de sesiones de test
+    transcription.py       transcripción de audio con OpenAI
     vision.py              análisis visual estructurado con OpenAI
+  admin/                   panel administrativo
+    commands.py            gestión de comandos administrativos
+    routes.py              rutas del panel admin
 tenants/
-  vanity/business.json     configuración versionada del tenant Vanity
-docs/
-  system_prompt.md
-  db.md
-  evolution_api_latency_guide.md
-  service_catalog.md
+  vanity/
+    business.json          configuración versionada del tenant Vanity
+    knowledge/             documentos de conocimiento por tenant
+      identity.md          identidad del bot, límites, estilo
+      policies.md          políticas de booking, escalación, autoridad
+      booking_flow.md      flujo estructurado de booking
+      roles.md             perfiles de staff y mezcla de roles
+      escalation.md        políticas de escalación humana
+docs/                      documentación operativa
+  system_prompt.md         prompt del sistema
+  db.md                    esquema de base de datos
+  migration_guide.md       guía de migración operativa
+  refactor_status.md       estado del refactor
+  rule_classification_matrix.md  matriz de clasificación de reglas
+  testing_runtime_v2.md    guía de pruebas del runtime V2
+  operations_runtime_v2.md guía de operación del runtime V2
+  conversation_flow.md     flujo de conversación
+  service_catalog.md       catálogo de servicios
+  evolution_api_latency_guide.md  guía de latencia de Evolution API
+scripts/
+  validate_migration.py    script de validación de migración V1→V2
+tests/                     suite de pruebas (343 tests)
 whatsapp_interactions/
-  messaging_selfimp.md
-tests/
-  test_*.py
+  messaging_selfimp.md     interacciones reales para aprendizaje
 ```
 
 ## Setup local
